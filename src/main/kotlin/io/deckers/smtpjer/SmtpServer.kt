@@ -1,10 +1,15 @@
+package io.deckers.smtpjer
+
 import arrow.core.Either
+import arrow.core.getOrElse
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.*
 import kotlin.concurrent.thread
+
+private val logger = KotlinLogging.logger {}
 
 // ehlo example.com
 // mail from: ely@infi.nl
@@ -38,14 +43,14 @@ import kotlin.concurrent.thread
 
 const val COMMAND_EHLO = "EHLO"
 const val COMMAND_MAIL_FROM = "MAIL FROM:"
-const val COMMAND_RCPT_TO = "RCPT_TO:"
+const val COMMAND_RCPT_TO = "RCPT TO:"
 const val COMMAND_DATA = "DATA"
 
-const val STATE_EHLO = "STATE_EHLO"
-const val STATE_MAILERS = "STATE_MAILERS"
-const val STATE_MAIL_TO = "STATE_MAIL_TO"
-const val STATE_MAIL_FROM = "STATE_MAIL_FROM"
-const val STATE_DATA = "STATE_DATA"
+const val STATE_EHLO = "io.deckers.smtpjer.STATE_EHLO"
+const val STATE_MAILERS = "io.deckers.smtpjer.STATE_MAILERS"
+const val STATE_MAIL_TO = "io.deckers.smtpjer.STATE_MAIL_TO"
+const val STATE_MAIL_FROM = "io.deckers.smtpjer.STATE_MAIL_FROM"
+const val STATE_DATA = "io.deckers.smtpjer.STATE_DATA"
 
 val stateTable = mapOf(
   STATE_EHLO to mapOf(COMMAND_EHLO to STATE_MAILERS),
@@ -61,7 +66,8 @@ val stateTable = mapOf(
 fun <T> List<T>.destructure() = Pair(component1(), drop(1))
 
 fun parseEhlo(line: String): Either<Throwable, List<String>> {
-  val (command, parts) = line.split("\\s+").destructure()
+  val xs = line.split("\\s+".toRegex())
+  val (command, parts) = xs.destructure()
 
   if (command.toUpperCase() != COMMAND_EHLO) {
     return Either.Left(Error("Expected line to start with $COMMAND_EHLO got $command"))
@@ -71,11 +77,13 @@ fun parseEhlo(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_EHLO takes a single parameter (parameter=domain)"))
   }
 
-  return Either.Right(listOf(command) + parts)
+  return Either.Right(listOf(command.toUpperCase()) + parts)
 }
 
 fun parseMailFrom(line: String): Either<Throwable, List<String>> {
-  val (command, parts) = line.split("\\s+").destructure()
+  val (command, parts) = listOf(
+    line.substring(0, COMMAND_MAIL_FROM.length),
+    line.substring(COMMAND_MAIL_FROM.length).trim()).destructure()
 
   if (command.toUpperCase() != COMMAND_MAIL_FROM) {
     return Either.Left(Error("Expected line to start with $COMMAND_MAIL_FROM got $command"))
@@ -85,11 +93,13 @@ fun parseMailFrom(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_MAIL_FROM takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(listOf(command) + parts)
+  return Either.Right(listOf(command.toUpperCase()) + parts)
 }
 
 fun parseRcptTo(line: String): Either<Throwable, List<String>> {
-  val (command, parts) = line.split("\\s+").destructure()
+  val (command, parts) = listOf(
+    line.substring(0, COMMAND_RCPT_TO.length),
+    line.substring(COMMAND_RCPT_TO.length).trim()).destructure()
 
   if (command.toUpperCase() != COMMAND_RCPT_TO) {
     return Either.Left(Error("Expected line to start with $COMMAND_RCPT_TO got $command"))
@@ -99,10 +109,16 @@ fun parseRcptTo(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_RCPT_TO takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(listOf(command) + parts)
+  return Either.Right(listOf(command.toUpperCase()) + parts)
 }
 
-fun parseData(line: String): Either<Throwable, List<String>> = Either.Right(line.split("\\s+"))
+fun parseData(line: String): Either<Throwable, List<String>> {
+  if (line.trim().toUpperCase() != COMMAND_DATA) {
+    return Either.Left(Error("Expected line to start with $COMMAND_DATA got $line"))
+  }
+
+  return Either.Right(listOf(COMMAND_DATA))
+}
 
 private val parsers = mapOf(
   COMMAND_EHLO to ::parseEhlo,
@@ -112,16 +128,19 @@ private val parsers = mapOf(
 )
 
 private class SmtpStateMachine {
-  var state = STATE_EHLO
+  private var state = STATE_EHLO
 
   fun next(cmd: String, parameters: List<String>) {
+    logger.info("Received command (cmd={})", cmd)
     val maybeNextState = stateTable[state]?.get(cmd)
 
     if (maybeNextState == null) {
+      logger.error("Failed to change state {} using command {}", state, cmd)
       return
     }
 
     // Do something funny
+    logger.debug("Change from {} to {}", state, maybeNextState)
 
     state = maybeNextState
   }
@@ -136,27 +155,35 @@ fun parse(line: String): Either<Throwable, List<String>> {
   return parse(line)
 }
 
-private class SmtpClientHandler(private val client: Socket) {
+private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val smtpStateMachine = SmtpStateMachine()
 
   fun run() {
-    val errorOrParsedCommand = parse(reader.nextLine())
+    while (true) {
+      val errorOrParsedCommand = parse(reader.nextLine())
 
-    errorOrParsedCommand.map { cmd -> smtpStateMachine.next(cmd[0], cmd.drop(1)) }
+      val process =
+        errorOrParsedCommand
+          .fold(
+            { e -> { logger.error(e) { "Nou zeg." } } },
+            { cmd -> { smtpStateMachine.next(cmd[0], cmd.drop(1)) } }
+          )
+
+      process()
+    }
   }
 }
 
 class SmtpServer(port: Int) : Closeable {
-  private val logger = KotlinLogging.logger {}
   private val server = ServerSocket(port)
 
   init {
-    logger.debug("Server listening (port={port})", server.localPort)
+    logger.info("Server listening (port={})", server.localPort)
 
     while (true) {
       val client = server.accept()
-      println("Client connected: ${client.inetAddress.hostAddress}")
+      logger.info("Client connected (host={})", client.inetAddress.hostAddress)
 
       thread { SmtpClientHandler(client).run() }
     }
