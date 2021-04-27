@@ -2,7 +2,6 @@ package io.deckers.smtpjer
 
 import mu.KotlinLogging
 import java.io.Closeable
-import java.io.Writer
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.*
@@ -57,8 +56,6 @@ val stateTable = mapOf(
   STATE_DATA to mapOf(COMMAND_DATA to STATE_EHLO),
 )
 
-fun <T> List<T>.destructure() = Pair(component1(), drop(1))
-
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val smtpStateMachine = SmtpStateMachine()
@@ -71,9 +68,11 @@ private class SmtpClientHandler(client: Socket) {
         errorOrParsedCommand
           .fold(
             { e -> { logger.error(e) { "Nou zeg." } } },
-            { cmd -> {
-              smtpStateMachine.next(cmd[0], cmd.drop(1))
-            } }
+            { cmd ->
+              {
+                smtpStateMachine.next(cmd[0], cmd.drop(1))
+              }
+            }
           )
 
       process()
@@ -87,15 +86,21 @@ class SmtpServer(port: Int) : Closeable {
   init {
     logger.info("Server listening (port={})", server.localPort)
 
-    while (true) {
+    thread {
       val client = server.accept()
       logger.info("Client connected (host={})", client.inetAddress.hostAddress)
 
-      thread { SmtpClientHandler(client).run() }
+      SmtpClientHandler(client).run()
     }
+
+    logger.info("OH.")
   }
 
   override fun close() {
+    if (server.isClosed) {
+      return
+    }
+
     server.close()
   }
 }

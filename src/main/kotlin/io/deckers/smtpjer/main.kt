@@ -1,9 +1,14 @@
 package io.deckers.smtpjer
 
-fun main(args: Array<String>) {
-    val s = SmtpServer(9999)
+import kotlin.system.exitProcess
 
-    print("Press any key to quit.")
+fun main() {
+  val s = SmtpServer(9999)
+
+  s.use {
+    println("Press any key to quit.")
     readLine()
-    s.close()
+  }
+
+  exitProcess(0)
 }
