@@ -59,19 +59,19 @@ private class SmtpClientHandler(client: Socket) {
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(this.domain, it.emailAddress))
+        transitionTo(State.RcptTo(domain, it.emailAddress))
       }
     }
 
     state<State.RcptTo> {
       on<Event.OnRcptTo> {
-        transitionTo(State.Data(this.domain, this.mailFrom, it.emailAddress))
+        transitionTo(State.Data(domain, mailFrom, it.emailAddress))
       }
     }
 
     state<State.Data> {
       on<Event.OnData> {
-        transitionTo(State.Data(this.domain, this.mailFrom, this.rcptTo), Command.ReceiveData)
+        transitionTo(State.Data(domain, mailFrom, rcptTo), Command.ReceiveData)
       }
       on<Event.OnDataCompleted> {
         transitionTo(State.Ehlo)
@@ -94,7 +94,15 @@ private class SmtpClientHandler(client: Socket) {
 
       when (validTransition.sideEffect) {
         Command.ReceiveData -> {
-          logger.debug("Start data retrieval")
+          logger.debug("Started data retrieval")
+
+          var line = ""
+          while (line != ".") {
+            line = reader.nextLine()
+            logger.debug { line }
+          }
+
+          logger.debug("Finished data retrieval")
         }
       }
     }
@@ -107,11 +115,15 @@ private class SmtpClientHandler(client: Socket) {
       val process =
         errorOrParsedCommand
           .fold(
-            { e -> { logger.error(e) { "Failed to parse command" } } },
+            { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
             { o -> { stateMachine.transition(o) } }
           )
 
-      process()
+      val transaction = process()
+
+      if (transaction is StateMachine.Transition.Invalid) {
+        break
+      }
     }
   }
 }
@@ -123,13 +135,18 @@ class SmtpServer(port: Int) : Closeable {
     logger.info("Server listening (port={})", server.localPort)
 
     thread {
-      val client = server.accept()
-      logger.info("Client connected (host={})", client.inetAddress.hostAddress)
+      while (true) {
+        val client = server.accept()
 
-      SmtpClientHandler(client).run()
+        thread {
+          client.use {
+            logger.info("Client connected (host={})", it.inetAddress.hostAddress)
+
+            SmtpClientHandler(it).run()
+          }
+        }
+      }
     }
-
-    logger.info("OH.")
   }
 
   override fun close() {
