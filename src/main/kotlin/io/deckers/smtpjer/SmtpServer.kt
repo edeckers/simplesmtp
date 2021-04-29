@@ -1,6 +1,7 @@
 package io.deckers.smtpjer
 
 import com.tinder.StateMachine
+import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.ServerSocket
@@ -48,7 +49,7 @@ const val COMMAND_DATA = "DATA"
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
-  private val processor = FileDataProcessor()
+  private val processorFactory = FileDataProcessorFactory()
 
   private val stateMachine = StateMachine.create<State, Event, Command> {
     initialState(State.Start)
@@ -105,15 +106,14 @@ private class SmtpClientHandler(client: Socket) {
 
 
           val st = validTransition.fromState as State.Data
-          val os = processor.create(st.domain, st.mailFrom, st.rcptTo)
+          val processor = processorFactory.create(st.domain, st.mailFrom, st.rcptTo)
 
           logger.debug("Started data retrieval")
 
           var line = ""
           while (line != ".") {
             line = reader.nextLine()
-            os.write(line.toByteArray())
-            logger.debug { line }
+            processor.write(line)
           }
 
           logger.debug("Finished data retrieval")
