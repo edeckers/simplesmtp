@@ -2,10 +2,8 @@ package io.deckers.smtpjer
 
 import arrow.core.Either
 
-
-private fun parseEhlo(line: String): Either<Throwable, List<String>> {
-  val xs = line.split("\\s+".toRegex())
-  val (command, parts) = xs.destructure()
+private fun parseEhlo(line: String): Either<Throwable, Event> {
+  val (command, parts) = line.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != COMMAND_EHLO) {
     return Either.Left(Error("Expected line to start with $COMMAND_EHLO got $command"))
@@ -15,14 +13,11 @@ private fun parseEhlo(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_EHLO takes a single parameter (parameter=domain)"))
   }
 
-  return Either.Right(listOf(command.toUpperCase()) + parts)
+  return Either.Right(Event.OnEhlo(parts[0]))
 }
 
-private fun parseMailFrom(line: String): Either<Throwable, List<String>> {
-  val (command, parts) = listOf(
-    line.substring(0, COMMAND_MAIL_FROM.length),
-    line.substring(COMMAND_MAIL_FROM.length).trim()
-  ).destructure()
+private fun parseMailFrom(line: String): Either<Throwable, Event> {
+  val (command, parts) = line.split(":").map { it.trim() }.destructure()
 
   if (command.toUpperCase() != COMMAND_MAIL_FROM) {
     return Either.Left(Error("Expected line to start with $COMMAND_MAIL_FROM got $command"))
@@ -32,14 +27,11 @@ private fun parseMailFrom(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_MAIL_FROM takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(listOf(command.toUpperCase()) + parts)
+  return Either.Right(Event.OnMailFrom(parts[0]))
 }
 
-private fun parseRcptTo(line: String): Either<Throwable, List<String>> {
-  val (command, parts) = listOf(
-    line.substring(0, COMMAND_RCPT_TO.length),
-    line.substring(COMMAND_RCPT_TO.length).trim()
-  ).destructure()
+private fun parseRcptTo(line: String): Either<Throwable, Event> {
+  val (command, parts) = line.split(":").map { it.trim() }.destructure()
 
   if (command.toUpperCase() != COMMAND_RCPT_TO) {
     return Either.Left(Error("Expected line to start with $COMMAND_RCPT_TO got $command"))
@@ -49,15 +41,15 @@ private fun parseRcptTo(line: String): Either<Throwable, List<String>> {
     return Either.Left(Error("$COMMAND_RCPT_TO takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(listOf(command.toUpperCase()) + parts)
+  return Either.Right(Event.OnRcptTo(parts[0]))
 }
 
-private fun parseData(line: String): Either<Throwable, List<String>> {
+private fun parseData(line: String): Either<Throwable, Event> {
   if (line.trim().toUpperCase() != COMMAND_DATA) {
     return Either.Left(Error("Expected line to start with $COMMAND_DATA got $line"))
   }
 
-  return Either.Right(listOf(COMMAND_DATA))
+  return Either.Right(Event.OnData)
 }
 
 private val parsers = mapOf(
@@ -67,11 +59,11 @@ private val parsers = mapOf(
   COMMAND_DATA to ::parseData
 )
 
-fun parse(line: String): Either<Throwable, List<String>> {
+fun parse(line: String): Either<Throwable, Event> {
   val maybeKey = parsers.keys.firstOrNull { line.startsWith(it, true) }
 
   val parseLine =
-    maybeKey?.let { key -> parsers[key] } ?: { Either.Left(Error("Could not find matching command")) }
+    maybeKey?.let { key -> parsers[key] } ?: { Either.Left(Error("Could not find matching command for '$line'")) }
 
   return parseLine(line)
 }

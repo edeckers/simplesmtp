@@ -1,5 +1,6 @@
 package io.deckers.smtpjer
 
+import com.tinder.StateMachine
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.ServerSocket
@@ -40,25 +41,64 @@ private val logger = KotlinLogging.logger {}
 // data      := binary <crlf><crlf>.
 
 const val COMMAND_EHLO = "EHLO"
-const val COMMAND_MAIL_FROM = "MAIL FROM:"
-const val COMMAND_RCPT_TO = "RCPT TO:"
+const val COMMAND_MAIL_FROM = "MAIL FROM"
+const val COMMAND_RCPT_TO = "RCPT TO"
 const val COMMAND_DATA = "DATA"
-
-const val STATE_EHLO = "STATE_EHLO"
-const val STATE_RCPT_TO = "STATE_MAIL_TO"
-const val STATE_MAIL_FROM = "STATE_MAIL_FROM"
-const val STATE_DATA = "STATE_DATA"
-
-val stateTable = mapOf(
-  STATE_EHLO to mapOf(COMMAND_EHLO to STATE_RCPT_TO),
-  STATE_MAIL_FROM to mapOf(COMMAND_MAIL_FROM to STATE_RCPT_TO),
-  STATE_RCPT_TO to mapOf(COMMAND_RCPT_TO to STATE_DATA),
-  STATE_DATA to mapOf(COMMAND_DATA to STATE_EHLO),
-)
 
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
-  private val smtpStateMachine = SmtpStateMachine()
+
+  private val stateMachine = StateMachine.create<State, Event, Command> {
+    initialState(State.Ehlo)
+
+    state<State.Ehlo> {
+      on<Event.OnEhlo> {
+        transitionTo(State.MailFrom(it.domain))
+      }
+    }
+
+    state<State.MailFrom> {
+      on<Event.OnMailFrom> {
+        transitionTo(State.RcptTo(this.domain, it.emailAddress))
+      }
+    }
+
+    state<State.RcptTo> {
+      on<Event.OnRcptTo> {
+        transitionTo(State.Data(this.domain, this.mailFrom, it.emailAddress))
+      }
+    }
+
+    state<State.Data> {
+      on<Event.OnData> {
+        transitionTo(State.Data(this.domain, this.mailFrom, this.rcptTo), Command.ReceiveData)
+      }
+      on<Event.OnDataCompleted> {
+        transitionTo(State.Ehlo)
+      }
+    }
+
+    onTransition {
+      val validTransition = it as? StateMachine.Transition.Valid
+      if (validTransition == null) {
+        logger.error("Failed to change state {} using command {}", it.fromState, it.event)
+        return@onTransition
+      }
+
+      when (val evt = validTransition.event) {
+        is Event.OnEhlo -> logger.debug("EHLO {}", evt.domain)
+        is Event.OnMailFrom -> logger.debug("MAIL FROM {}", evt.emailAddress)
+        is Event.OnRcptTo -> logger.debug("RCPT TO {}", evt.emailAddress)
+        is Event.OnData -> logger.debug("DATA")
+      }
+
+      when (validTransition.sideEffect) {
+        Command.ReceiveData -> {
+          logger.debug("Start data retrieval")
+        }
+      }
+    }
+  }
 
   fun run() {
     while (true) {
@@ -67,12 +107,8 @@ private class SmtpClientHandler(client: Socket) {
       val process =
         errorOrParsedCommand
           .fold(
-            { e -> { logger.error(e) { "Nou zeg." } } },
-            { cmd ->
-              {
-                smtpStateMachine.next(cmd[0], cmd.drop(1))
-              }
-            }
+            { e -> { logger.error(e) { "Failed to parse command" } } },
+            { o -> { stateMachine.transition(o) } }
           )
 
       process()

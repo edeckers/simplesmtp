@@ -14,7 +14,7 @@ repositories {
 
 dependencies {
     implementation("io.github.microutils:kotlin-logging-jvm:2.0.6")
-    // implementation("org.slf4j:slf4j-simple:1.6.1")
+    implementation("com.tinder.statemachine:statemachine:0.2.0")
     implementation("ch.qos.logback:logback-classic:1.2.3")
     implementation("io.arrow-kt:arrow-core:0.13.1")
     testImplementation(kotlin("test-junit5"))
