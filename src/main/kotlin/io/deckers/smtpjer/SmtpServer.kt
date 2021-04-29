@@ -48,6 +48,7 @@ const val COMMAND_DATA = "DATA"
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
+  private val processor = FileDataProcessor()
 
   private val stateMachine = StateMachine.create<State, Event, Command> {
     initialState(State.Start)
@@ -102,11 +103,16 @@ private class SmtpClientHandler(client: Socket) {
         is Command.ReceiveData -> {
           writer.write("354 - Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
 
+
+          val st = validTransition.fromState as State.Data
+          val os = processor.create(st.domain, st.mailFrom, st.rcptTo)
+
           logger.debug("Started data retrieval")
 
           var line = ""
           while (line != ".") {
             line = reader.nextLine()
+            os.write(line.toByteArray())
             logger.debug { line }
           }
 
