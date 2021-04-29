@@ -47,34 +47,40 @@ const val COMMAND_DATA = "DATA"
 
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
+  private val writer = client.getOutputStream()
 
   private val stateMachine = StateMachine.create<State, Event, Command> {
-    initialState(State.Ehlo)
+    initialState(State.Start)
+
+    state<State.Start> {
+      on<Event.OnConnect> {
+        transitionTo(State.Ehlo, Command.WriteStatus(220, "<domain> Service ready"))
+      }
+    }
 
     state<State.Ehlo> {
       on<Event.OnEhlo> {
-        transitionTo(State.MailFrom(it.domain))
+        transitionTo(State.MailFrom(it.domain), Command.WriteStatus(250, "2.1.0 Ok"))
       }
     }
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(domain, it.emailAddress))
+        transitionTo(State.RcptTo(domain, it.emailAddress), Command.WriteStatus(250, "2.1.5 Ok"))
       }
     }
 
     state<State.RcptTo> {
       on<Event.OnRcptTo> {
-        transitionTo(State.Data(domain, mailFrom, it.emailAddress))
+        transitionTo(
+          State.Data(domain, mailFrom, it.emailAddress), Command.WriteStatus(250, "2.1.5 Ok"),
+        )
       }
     }
 
     state<State.Data> {
       on<Event.OnData> {
-        transitionTo(State.Data(domain, mailFrom, rcptTo), Command.ReceiveData)
-      }
-      on<Event.OnDataCompleted> {
-        transitionTo(State.Ehlo)
+        transitionTo(State.Ehlo, Command.ReceiveData)
       }
     }
 
@@ -92,8 +98,10 @@ private class SmtpClientHandler(client: Socket) {
         is Event.OnData -> logger.debug("DATA")
       }
 
-      when (validTransition.sideEffect) {
-        Command.ReceiveData -> {
+      when (val cmd = validTransition.sideEffect) {
+        is Command.ReceiveData -> {
+          writer.write("354 - Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
+
           logger.debug("Started data retrieval")
 
           var line = ""
@@ -104,12 +112,17 @@ private class SmtpClientHandler(client: Socket) {
 
           logger.debug("Finished data retrieval")
         }
+        is Command.WriteStatus -> {
+          writer.write("${cmd.code} - ${cmd.message}\n".toByteArray())
+        }
       }
     }
   }
 
   fun run() {
-    while (true) {
+    var transaction = stateMachine.transition(Event.OnConnect)
+
+    while (transaction is StateMachine.Transition.Valid) {
       val errorOrParsedCommand = parse(reader.nextLine())
 
       val process =
@@ -119,11 +132,7 @@ private class SmtpClientHandler(client: Socket) {
             { o -> { stateMachine.transition(o) } }
           )
 
-      val transaction = process()
-
-      if (transaction is StateMachine.Transition.Invalid) {
-        break
-      }
+      transaction = process()
     }
   }
 }
