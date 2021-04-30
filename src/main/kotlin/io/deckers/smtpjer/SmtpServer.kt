@@ -4,6 +4,7 @@ import com.tinder.StateMachine
 import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
 import mu.KotlinLogging
 import java.io.Closeable
+import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.*
@@ -27,7 +28,7 @@ private val logger = KotlinLogging.logger {}
 // .
 
 
-// EHLO <domain>
+// HELO <domain>
 // MAIL FROM: <e-mail address>
 // RCPT TO: <e-mail address>
 // DATA
@@ -41,10 +42,12 @@ private val logger = KotlinLogging.logger {}
 // rcpt_to   := rcpt to: <email_address>
 // data      := binary <crlf><crlf>.
 
+const val COMMAND_DATA = "DATA"
 const val COMMAND_EHLO = "EHLO"
+const val COMMAND_HELO = "HELO"
 const val COMMAND_MAIL_FROM = "MAIL FROM"
 const val COMMAND_RCPT_TO = "RCPT TO"
-const val COMMAND_DATA = "DATA"
+const val COMMAND_QUIT = "QUIT"
 
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
@@ -56,19 +59,22 @@ private class SmtpClientHandler(client: Socket) {
 
     state<State.Start> {
       on<Event.OnConnect> {
-        transitionTo(State.Ehlo, Command.WriteStatus(220, "<domain> Service ready"))
+        transitionTo(State.Helo, Command.WriteStatus(220, "${InetAddress.getLocalHost()} Service ready"))
       }
     }
 
-    state<State.Ehlo> {
+    state<State.Helo> {
       on<Event.OnEhlo> {
-        transitionTo(State.MailFrom(it.domain), Command.WriteStatus(250, "2.1.0 Ok"))
+        transitionTo(State.Helo, Command.WriteStatus(500, "5.5.1 Syntax error, command unrecognized"))
+      }
+      on<Event.OnHelo> {
+        transitionTo(State.MailFrom(it.domain), Command.WriteStatus(250, "Ok"))
       }
     }
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(domain, it.emailAddress), Command.WriteStatus(250, "2.1.5 Ok"))
+        transitionTo(State.RcptTo(domain, it.emailAddress), Command.WriteStatus(250, "2.1.0 Ok"))
       }
     }
 
@@ -82,7 +88,19 @@ private class SmtpClientHandler(client: Socket) {
 
     state<State.Data> {
       on<Event.OnData> {
-        transitionTo(State.Ehlo, Command.ReceiveData)
+        transitionTo(State.Finish, Command.ReceiveData)
+      }
+      on<Event.OnParseError> {
+        dontTransition(Command.WriteStatus(500, "Syntax error, command unrecognized"))
+      }
+    }
+
+    state<State.Finish> {
+      on<Event.OnQuit> {
+        transitionTo(State.Helo)
+      }
+      on<Event.OnParseError> {
+        dontTransition(Command.WriteStatus(500, "Syntax error, command unrecognized"))
       }
     }
 
@@ -94,16 +112,17 @@ private class SmtpClientHandler(client: Socket) {
       }
 
       when (val evt = validTransition.event) {
+        is Event.OnData -> logger.debug("DATA")
         is Event.OnEhlo -> logger.debug("EHLO {}", evt.domain)
+        is Event.OnHelo -> logger.debug("HELO {}", evt.domain)
         is Event.OnMailFrom -> logger.debug("MAIL FROM {}", evt.emailAddress)
         is Event.OnRcptTo -> logger.debug("RCPT TO {}", evt.emailAddress)
-        is Event.OnData -> logger.debug("DATA")
+        is Event.OnQuit -> logger.debug("QUIT")
       }
 
       when (val cmd = validTransition.sideEffect) {
         is Command.ReceiveData -> {
-          writer.write("354 - Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
-
+          writer.write("354 Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
 
           val st = validTransition.fromState as State.Data
           val processor = processorFactory.create(st.domain, st.mailFrom, st.rcptTo)
@@ -117,9 +136,11 @@ private class SmtpClientHandler(client: Socket) {
           }
 
           logger.debug("Finished data retrieval")
+
+          writer.write("250 2.6.0 Message Accepted\n".toByteArray())
         }
         is Command.WriteStatus -> {
-          writer.write("${cmd.code} - ${cmd.message}\n".toByteArray())
+          writer.write("${cmd.code} ${cmd.message}\n".toByteArray())
         }
       }
     }
