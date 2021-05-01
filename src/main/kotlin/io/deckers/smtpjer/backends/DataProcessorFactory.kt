@@ -1,5 +1,7 @@
 package io.deckers.smtpjer.backends
 
+import io.deckers.smtpjer.EmailAddress
+
 interface DataProcessorFactory {
-  fun create(domain: String, from: String, to: String) : DataProcessor
+  fun create(domain: String, from: EmailAddress, to: EmailAddress) : DataProcessor
 }

@@ -1,10 +1,10 @@
-package io.deckers.smtpjer.backends.file
+package io.deckers.smtpjer.backends.relay
 
 import io.deckers.smtpjer.EmailAddress
 import io.deckers.smtpjer.backends.DataProcessor
 import io.deckers.smtpjer.backends.DataProcessorFactory
 
-class FileDataProcessorFactory : DataProcessorFactory {
+class RelayDataProcessorFactory : DataProcessorFactory {
   override fun create(domain: String, from: EmailAddress, to: EmailAddress): DataProcessor =
-    FileDataProcessor(to)
+    RelayDataProcessor(domain, from, to)
 }

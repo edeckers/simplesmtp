@@ -133,6 +133,7 @@ private class SmtpClientHandler(client: Socket) {
           while (line != ".") {
             line = reader.nextLine()
             processor.write(line)
+            logger.debug("Line: $line")
           }
 
           logger.debug("Finished data retrieval")

@@ -41,7 +41,7 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> {
     return Either.Left(Error("$COMMAND_MAIL_FROM takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(Event.OnMailFrom(parts[0]))
+  return EmailAddress.parse(parts[0]).map(Event::OnMailFrom)
 }
 
 private fun parseRcptTo(line: String): Either<Throwable, Event> {
@@ -55,7 +55,7 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
     return Either.Left(Error("$COMMAND_RCPT_TO takes a single parameter (parameter=e-mail address)"))
   }
 
-  return Either.Right(Event.OnRcptTo(parts[0]))
+  return EmailAddress.parse(parts[0]).map(Event::OnRcptTo)
 }
 
 private fun parseData(line: String): Either<Throwable, Event> {

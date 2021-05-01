@@ -1,10 +1,11 @@
 package io.deckers.smtpjer.backends.file
 
+import io.deckers.smtpjer.EmailAddress
 import io.deckers.smtpjer.backends.DataProcessor
 import java.io.File
 
-class FileDataProcessor(domain: String, from: String, to: String) : DataProcessor {
-  private val os = File.createTempFile("smtp-ely.$domain.", ".txt").outputStream()
+class FileDataProcessor(to: EmailAddress) : DataProcessor {
+  private val os = File.createTempFile("smtp-ely.${to.mailbox}.", ".txt").outputStream()
 
   override fun write(line: String) {
     os.write(line.toByteArray())
