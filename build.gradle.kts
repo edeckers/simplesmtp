@@ -1,11 +1,13 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "1.4.32"
+    id("com.github.johnrengelman.shadow") version "5.2.0"
     application
 }
 
-group = "me.ely"
+group = "io.deckers.smtpjer"
 version = "1.0-SNAPSHOT"
 
 repositories {
@@ -31,5 +33,18 @@ tasks.withType<KotlinCompile>() {
 }
 
 application {
-    mainClassName = "MainKt"
+    mainClassName = "io.deckers.smtpjer.MainKt"
+}
+
+tasks.withType<ShadowJar> {
+
+    manifest.attributes.apply {
+        //put("Implementation-Version" version)
+        put("Main-Class", "io.deckers.smtpjer.MainKt")
+    }
+
+
+    baseName = "KtSmtp"
+    classifier = "SNAPSHOT"
+    version = "1.0"
 }
