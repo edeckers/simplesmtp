@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+source `dirname $0`/shared-functions
+
+build_root() {
+  jump_to_root_directory
+  ./gradlew build
+}
+
+build_root
+
+exit 0

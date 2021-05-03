@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+cd `dirname ${0}`/..
+
+ROOT_PATH=`pwd`
+
+jump_to_root_directory() {
+  cd ${ROOT_PATH}
+}

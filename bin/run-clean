@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+source `dirname $0`/shared-functions
+
+clean_kotlin() {
+  jump_to_root_directory
+  rm -rf build
+  rm -rf .gradle
+}
+
+clean_kotlin
+
+exit 0

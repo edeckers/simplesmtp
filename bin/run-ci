@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+source `dirname $0`/shared-functions
+
+ci_kotlin() {
+  jump_to_root_directory
+  bin/run-build
+  bin/run-tests
+}
+
+ci_kotlin
+
+exit 0
