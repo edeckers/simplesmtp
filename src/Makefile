@@ -41,4 +41,4 @@ run: build
 test: build
 	bin/run-tests
 
-.PHONY: build build-docker ci clean help run test
+.PHONY: build build-container ci clean deploy-container help run test
