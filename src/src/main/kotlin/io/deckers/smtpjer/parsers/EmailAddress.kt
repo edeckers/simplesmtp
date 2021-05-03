@@ -24,7 +24,5 @@ class EmailAddress(val address: String) {
     }
   }
 
-  override fun toString(): String {
-    return address
-  }
+  override fun toString(): String = address
 }

@@ -7,12 +7,12 @@ import io.deckers.smtpjer.parsers.parse
 import org.junit.jupiter.api.Test
 import kotlin.test.*
 
-const val ValidEhloCommand = "EHLO infi.nl"
-const val ValidHeloCommand = "HELO infi.nl"
-const val ValidMailFromCommand = "MAIL FROM: mailbox@domain.com"
-const val ValidRcptToCommand = "RCPT TO: mailbox@domain.com"
-const val ValidDataCommand = "DATA"
-const val ValidQuitCommand = "QUIT"
+private const val ValidEhloCommand = "EHLO infi.nl"
+private const val ValidHeloCommand = "HELO infi.nl"
+private const val ValidMailFromCommand = "MAIL FROM: mailbox@domain.com"
+private const val ValidRcptToCommand = "RCPT TO: mailbox@domain.com"
+private const val ValidDataCommand = "DATA"
+private const val ValidQuitCommand = "QUIT"
 
 class ParserTests {
   // region E-mail address
