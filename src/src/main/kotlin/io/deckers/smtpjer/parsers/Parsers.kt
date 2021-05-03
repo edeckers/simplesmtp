@@ -1,9 +1,11 @@
-package io.deckers.smtpjer
+package io.deckers.smtpjer.parsers
 
 import arrow.core.Either
+import io.deckers.smtpjer.*
+import io.deckers.smtpjer.state_machine.Event
 
 private fun parseEhlo(line: String): Either<Throwable, Event> {
-  val strippedLine = line.replace("\\s+".toRegex(), " ")
+  val strippedLine = stripCommand(line)
   val (command, parts) = strippedLine.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != COMMAND_EHLO) {
@@ -18,7 +20,8 @@ private fun parseEhlo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseHelo(line: String): Either<Throwable, Event> {
-  val (command, parts) = line.split("\\s+".toRegex()).destructure()
+  val strippedLine = stripCommand(line)
+  val (command, parts) = strippedLine.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != COMMAND_HELO) {
     return Either.Left(Error("Expected line to start with $COMMAND_HELO got $command"))
@@ -32,7 +35,10 @@ private fun parseHelo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseMailFrom(line: String): Either<Throwable, Event> {
-  val (command, parts) = line.split(":").map { it.trim() }.destructure()
+  val strippedLine = stripCommand(line)
+  val (command, rest) = strippedLine.split(":").map { it.trim() }.destructure()
+
+  val parts = if (rest.isNotEmpty()) rest[0].trim().split("\\s+".toRegex()) else emptyList()
 
   if (command.toUpperCase() != COMMAND_MAIL_FROM) {
     return Either.Left(Error("Expected line to start with $COMMAND_MAIL_FROM got $command"))
@@ -46,7 +52,8 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> {
 }
 
 private fun parseRcptTo(line: String): Either<Throwable, Event> {
-  val (command, parts) = line.split(":").map { it.trim() }.destructure()
+  val strippedLine = stripCommand(line)
+  val (command, parts) = strippedLine.split(":").map { it.trim() }.destructure()
 
   if (command.toUpperCase() != COMMAND_RCPT_TO) {
     return Either.Left(Error("Expected line to start with $COMMAND_RCPT_TO got $command"))
@@ -60,20 +67,24 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseData(line: String): Either<Throwable, Event> {
-  if (line.trim().toUpperCase() != COMMAND_DATA) {
-    return Either.Left(Error("Expected line to start with $COMMAND_DATA got $line"))
+  val strippedLine = stripCommand(line)
+  if (strippedLine.toUpperCase() != COMMAND_DATA) {
+    return Either.Left(Error("Expected line to start with $COMMAND_DATA got $strippedLine"))
   }
 
   return Either.Right(Event.OnData)
 }
 
 private fun parseQuit(line: String): Either<Throwable, Event> {
-  if (line.trim().toUpperCase() != COMMAND_QUIT) {
-    return Either.Left(Error("Expected line to start with $COMMAND_QUIT got $line"))
+  val strippedLine = stripCommand(line)
+  if (strippedLine.toUpperCase() != COMMAND_QUIT) {
+    return Either.Left(Error("Expected line to start with $COMMAND_QUIT got $strippedLine"))
   }
 
   return Either.Right(Event.OnQuit)
 }
+
+private fun stripCommand(line: String) = line.replace("\\s+".toRegex(), " ")
 
 private val parsers = mapOf(
   COMMAND_DATA to ::parseData,
@@ -89,7 +100,8 @@ fun parse(line: String): Either<Throwable, Event> {
   val maybeKey = parsers.keys.firstOrNull { trimmedLine.startsWith(it, true) }
 
   val parseLine =
-    maybeKey?.let { key -> parsers[key] } ?: { Either.Left(Error("Could not find matching command for '$trimmedLine'")) }
+    maybeKey?.let { key -> parsers[key] }
+      ?: { Either.Left(Error("Could not find matching command for '$trimmedLine'")) }
 
   return parseLine(trimmedLine)
 }

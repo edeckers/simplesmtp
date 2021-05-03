@@ -1,6 +1,6 @@
 package io.deckers.smtpjer.backends.relay
 
-import io.deckers.smtpjer.EmailAddress
+import io.deckers.smtpjer.parsers.EmailAddress
 import io.deckers.smtpjer.backends.DataProcessor
 import io.deckers.smtpjer.backends.DataProcessorFactory
 

@@ -2,6 +2,10 @@ package io.deckers.smtpjer
 
 import com.tinder.StateMachine
 import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
+import io.deckers.smtpjer.parsers.parse
+import io.deckers.smtpjer.state_machine.Command
+import io.deckers.smtpjer.state_machine.Event
+import io.deckers.smtpjer.state_machine.State
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.InetAddress
@@ -11,36 +15,6 @@ import java.util.*
 import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
-
-// ehlo example.com
-// mail from: ely@infi.nl
-// rcpt to: ely@deckers.io
-// data
-// Subject: My Telnet Test Email
-//
-// Hello,
-//
-// This is an email sent by using the telnet command.
-//
-// Your friend,
-// Me
-//
-// .
-
-
-// HELO <domain>
-// MAIL FROM: <e-mail address>
-// RCPT TO: <e-mail address>
-// DATA
-// ...
-//
-// .
-
-// expr      := <ehlo> | <mail_from> | <rcpt_to> | <data>
-// ehlo      := ehlo <domain_name>
-// mail_from := mail from: <email_address>
-// rcpt_to   := rcpt to: <email_address>
-// data      := binary <crlf><crlf>.
 
 const val COMMAND_DATA = "DATA"
 const val COMMAND_EHLO = "EHLO"
