@@ -3,7 +3,8 @@ package io.deckers.smtpjer
 import arrow.core.Either
 
 private fun parseEhlo(line: String): Either<Throwable, Event> {
-  val (command, parts) = line.split("\\s+".toRegex()).destructure()
+  val strippedLine = line.replace("\\s+".toRegex(), " ")
+  val (command, parts) = strippedLine.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != COMMAND_EHLO) {
     return Either.Left(Error("Expected line to start with $COMMAND_EHLO got $command"))
@@ -84,10 +85,11 @@ private val parsers = mapOf(
 )
 
 fun parse(line: String): Either<Throwable, Event> {
-  val maybeKey = parsers.keys.firstOrNull { line.startsWith(it, true) }
+  val trimmedLine = line.trim()
+  val maybeKey = parsers.keys.firstOrNull { trimmedLine.startsWith(it, true) }
 
   val parseLine =
-    maybeKey?.let { key -> parsers[key] } ?: { Either.Left(Error("Could not find matching command for '$line'")) }
+    maybeKey?.let { key -> parsers[key] } ?: { Either.Left(Error("Could not find matching command for '$trimmedLine'")) }
 
-  return parseLine(line)
+  return parseLine(trimmedLine)
 }
