@@ -105,10 +105,10 @@ private class SmtpClientHandler(client: Socket) {
 
           logger.debug("Started data retrieval")
 
-          val lastThreeLines = ArrayDeque<String>(3)
+          val lastThreeLines = CircularQueue(3)
           while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
             val line = reader.nextLine()
-            lastThreeLines.addLast(line)
+            lastThreeLines.push(line)
 
             processor.write(line)
             logger.debug("Line: $line")

@@ -1,124 +1,134 @@
 import org.junit.jupiter.api.Test
-import java.util.*
-import kotlin.test.assertEquals
 
 class ProtocolTests {
-
   @Test
-  fun assert_ehlo_returns_500() = runContext { _, client ->
+  fun assert_ehlo_returns_500() = withClient {
+    // Arrange
+    val welcomeResponse = read()
 
-    val reader = Scanner(client.getInputStream())
-    val welcomeResponse = reader.nextLine()
+    // Act
+    write("EHLO domain.com")
+    val ehloResponse = read()
 
-    val writer = client.getOutputStream()
-
-    writer.write("EHLO domain.com\n".toByteArray())
-    val ehloResponse = reader.nextLine()
-
-    assertEquals("220", welcomeResponse.substring(0, 3))
-    assertEquals("500", ehloResponse.substring(0, 3))
+    // Assert
+    assertResponse(220, welcomeResponse)
+    assertResponse(500, ehloResponse)
   }
 
   @Test
-  fun assert_helo_returns_250() = runContext { _, client ->
+  fun assert_helo_returns_250() = withClient {
+    // Arrange
+    val welcomeResponse = read()
 
-    val reader = Scanner(client.getInputStream())
-    val welcomeResponse = reader.nextLine()
+    // Act
+    write("HELO domain.com")
+    val heloResponse = read()
 
-    val writer = client.getOutputStream()
-
-    writer.write("HELO domain.com\n".toByteArray())
-    val heloResponse = reader.nextLine()
-
-    assertEquals("220", welcomeResponse.substring(0, 3))
-    assertEquals("250", heloResponse.substring(0, 3))
+    // Assert
+    assertResponse(220, welcomeResponse)
+    assertResponse(250, heloResponse)
   }
 
   @Test
-  fun assert_mail_from_returns_250() = runContext { _, client ->
+  fun assert_mail_from_returns_250() = withClient {
+    // Arrange
+    discard()
 
-    val reader = Scanner(client.getInputStream())
-    reader.nextLine()
+    discard { helo("domain.com") }
 
-    val writer = client.getOutputStream()
+    // Act
+    write("MAIL FROM: mailbox@domain.com")
+    val mailFromResponse = read()
 
-    writer.write("HELO domain.com\n".toByteArray())
-    reader.nextLine()
-
-    writer.write("MAIL FROM: mailbox@domain.com\n".toByteArray())
-    val mailFromResponse = reader.nextLine()
-
-    assertEquals("250", mailFromResponse.substring(0, 3))
+    // Assert
+    assertResponse(250, mailFromResponse)
   }
 
   @Test
-  fun assert_rcpt_to_returns_250() = runContext { _, client ->
+  fun assert_rcpt_to_returns_250() = withClient {
+    // Arrange
+    discard()
 
-    val reader = Scanner(client.getInputStream())
-    reader.nextLine()
+    discard { helo("domain.com") }
 
-    val writer = client.getOutputStream()
+    discard { mail("mailbox@domain.com") }
 
-    writer.write("HELO domain.com\n".toByteArray())
-    reader.nextLine()
+    // Act
+    write("RCPT TO: mailbox@domain.com")
+    val rcptToResponse = read()
 
-    writer.write("MAIL FROM: mailbox@domain.com\n".toByteArray())
-    reader.nextLine()
-
-    writer.write("RCPT TO: mailbox@domain.com\n".toByteArray())
-    val rcptToResponse = reader.nextLine()
-
-    assertEquals("250", rcptToResponse.substring(0, 3))
+    // Assert
+    assertResponse(250, rcptToResponse)
   }
 
   @Test
-  fun assert_data_returns_354() = runContext { _, client ->
-    val reader = Scanner(client.getInputStream())
-    reader.nextLine()
+  fun assert_data_returns_354() = withClient {
+    // Arrange
+    discard()
 
-    val writer = client.getOutputStream()
+    discard { helo("domain.com") }
 
-    writer.write("HELO domain.com\n".toByteArray())
-    reader.nextLine()
+    discard { mail("mailbox@domain.com") }
 
-    writer.write("MAIL FROM: mailbox@domain.com\n".toByteArray())
-    reader.nextLine()
+    discard { toRecipient("mailbox@domain.com") }
 
-    writer.write("RCPT TO: mailbox@domain.com\n".toByteArray())
-    reader.nextLine()
+    // Act
+    write("DATA")
+    val dataToResponse = read()
 
-    writer.write("DATA\n".toByteArray())
-    val dataToResponse = reader.nextLine()
-
-    assertEquals("354", dataToResponse.substring(0, 3))
+    // Assert
+    assertResponse(354, dataToResponse)
   }
 
   @Test
-  fun assert_data_finish_returns_250() = runContext { _, client ->
-    val reader = Scanner(client.getInputStream())
-    reader.nextLine()
+  fun assert_data_finish_returns_250() = withClient {
+    // Arrange
+    discard()
 
-    val writer = client.getOutputStream()
+    discard { helo("domain.com") }
 
-    writer.write("HELO domain.com\n".toByteArray())
-    reader.nextLine()
+    discard { mail("mailbox@domain.com") }
 
-    writer.write("MAIL FROM: mailbox@domain.com\n".toByteArray())
-    reader.nextLine()
+    discard { toRecipient("mailbox@domain.com") }
 
-    writer.write("RCPT TO: mailbox@domain.com\n".toByteArray())
-    reader.nextLine()
+    // Act
+    discard { data() }
 
-    writer.write("DATA\n".toByteArray())
-    reader.nextLine()
+    write("this is some irrelevant data that")
+    write("spans multiple lines, to demonstrate")
+    write("that the connection is kept until the")
+    write("kill sequence is received.")
 
-    writer.write("\n".toByteArray())
+    write("")
+    write(".")
+    write("")
 
-    writer.write(".\n".toByteArray())
+    val dataEndResponse = read()
 
-    writer.write("\n".toByteArray())
-    val dataEndResponse = reader.nextLine()
+    // Assert
+    assertResponse(250, dataEndResponse)
+  }
 
-    assertEquals("250", dataEndResponse.substring(0, 3))
+  @Test
+  fun assert_data_obscured_kill_sequence_return_250() = withClient {
+    // Arrange
+    runToData()
+
+    // Act
+    write("")
+    write(".")
+    write(".")
+    write("")
+    write("")
+    write(".")
+    write("a")
+    write("")
+    write(".")
+    write("")
+
+    val dataEndResponse = read()
+
+    // Assert
+    assertResponse(250, dataEndResponse)
   }
 }
