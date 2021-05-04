@@ -16,12 +16,14 @@ import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
 
-const val COMMAND_DATA = "DATA"
-const val COMMAND_EHLO = "EHLO"
-const val COMMAND_HELO = "HELO"
-const val COMMAND_MAIL_FROM = "MAIL FROM"
-const val COMMAND_RCPT_TO = "RCPT TO"
-const val COMMAND_QUIT = "QUIT"
+const val CommandData = "DATA"
+const val CommandEhlo = "EHLO"
+const val CommandHelo = "HELO"
+const val CommandMailFrom = "MAIL FROM"
+const val CommandRcptTo = "RCPT TO"
+const val CommandQuit = "QUIT"
+
+private val EndOfDataStreamPattern = arrayOf("", ".", "")
 
 private class SmtpClientHandler(client: Socket) {
   private val reader: Scanner = Scanner(client.getInputStream())
@@ -103,9 +105,11 @@ private class SmtpClientHandler(client: Socket) {
 
           logger.debug("Started data retrieval")
 
-          var line = ""
-          while (line != ".") {
-            line = reader.nextLine()
+          val lastThreeLines = ArrayDeque<String>(3)
+          while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
+            val line = reader.nextLine()
+            lastThreeLines.addLast(line)
+
             processor.write(line)
             logger.debug("Line: $line")
           }

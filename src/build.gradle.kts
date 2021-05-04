@@ -19,6 +19,7 @@ dependencies {
     implementation("com.tinder.statemachine:statemachine:0.2.0")
     implementation("ch.qos.logback:logback-classic:1.2.3")
     implementation("io.arrow-kt:arrow-core:0.13.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.2")
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.6.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.6.0")

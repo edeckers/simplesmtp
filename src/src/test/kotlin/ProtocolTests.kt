@@ -1,16 +1,11 @@
-import io.deckers.smtpjer.SmtpServer
 import org.junit.jupiter.api.Test
-import java.net.Socket
 import java.util.*
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ProtocolTests {
+
   @Test
-  fun assert_ehlo_returns_500() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
+  fun assert_ehlo_returns_500() = runContext { _, client ->
 
     val reader = Scanner(client.getInputStream())
     val welcomeResponse = reader.nextLine()
@@ -25,9 +20,7 @@ class ProtocolTests {
   }
 
   @Test
-  fun assert_helo_returns_250() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
+  fun assert_helo_returns_250() = runContext { _, client ->
 
     val reader = Scanner(client.getInputStream())
     val welcomeResponse = reader.nextLine()
@@ -42,9 +35,7 @@ class ProtocolTests {
   }
 
   @Test
-  fun assert_mail_from_returns_250() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
+  fun assert_mail_from_returns_250() = runContext { _, client ->
 
     val reader = Scanner(client.getInputStream())
     reader.nextLine()
@@ -61,9 +52,7 @@ class ProtocolTests {
   }
 
   @Test
-  fun assert_rcpt_to_returns_250() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
+  fun assert_rcpt_to_returns_250() = runContext { _, client ->
 
     val reader = Scanner(client.getInputStream())
     reader.nextLine()
@@ -83,10 +72,7 @@ class ProtocolTests {
   }
 
   @Test
-  fun assert_data_returns_354() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
-
+  fun assert_data_returns_354() = runContext { _, client ->
     val reader = Scanner(client.getInputStream())
     reader.nextLine()
 
@@ -108,10 +94,7 @@ class ProtocolTests {
   }
 
   @Test
-  fun assert_data_finish_returns_250() {
-    SmtpServer(9999)
-    val client = Socket("127.0.0.1", 9999)
-
+  fun assert_data_finish_returns_250() = runContext { _, client ->
     val reader = Scanner(client.getInputStream())
     reader.nextLine()
 
@@ -129,7 +112,11 @@ class ProtocolTests {
     writer.write("DATA\n".toByteArray())
     reader.nextLine()
 
+    writer.write("\n".toByteArray())
+
     writer.write(".\n".toByteArray())
+
+    writer.write("\n".toByteArray())
     val dataEndResponse = reader.nextLine()
 
     assertEquals("250", dataEndResponse.substring(0, 3))
