@@ -1,5 +1,7 @@
 package io.deckers.smtpjer
 
+import arrow.core.Option
+import arrow.core.getOrElse
 import com.tinder.StateMachine
 import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
 import io.deckers.smtpjer.parsers.parse
@@ -30,34 +32,41 @@ private class SmtpClientHandler(client: Socket) {
   private val writer = client.getOutputStream()
   private val processorFactory = FileDataProcessorFactory()
 
+  private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
+    Command.WriteStatus(
+      code,
+      Option(extendedCode)
+        .map { "$it $message" }
+        .getOrElse { message })
+
   private val stateMachine = StateMachine.create<State, Event, Command> {
     initialState(State.Start)
 
     state<State.Start> {
       on<Event.OnConnect> {
-        transitionTo(State.Helo, Command.WriteStatus(220, "${InetAddress.getLocalHost()} Service ready"))
+        transitionTo(State.Helo, status(220, "${InetAddress.getLocalHost()} Service ready"))
       }
     }
 
     state<State.Helo> {
       on<Event.OnEhlo> {
-        transitionTo(State.Helo, Command.WriteStatus(500, "5.5.1 Syntax error, command unrecognized"))
+        transitionTo(State.Helo, status(500, "Syntax error, command unrecognized", "5.5.1"))
       }
       on<Event.OnHelo> {
-        transitionTo(State.MailFrom(it.domain), Command.WriteStatus(250, "Ok"))
+        transitionTo(State.MailFrom(it.domain), status(250, "Ok"))
       }
     }
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(domain, it.emailAddress), Command.WriteStatus(250, "2.1.0 Ok"))
+        transitionTo(State.RcptTo(domain, it.emailAddress), status(250, "Ok", "2.1.0"))
       }
     }
 
     state<State.RcptTo> {
       on<Event.OnRcptTo> {
         transitionTo(
-          State.Data(domain, mailFrom, it.emailAddress), Command.WriteStatus(250, "2.1.5 Ok"),
+          State.Data(domain, mailFrom, it.emailAddress), status(250, "Ok", "2.1.5"),
         )
       }
     }
@@ -67,7 +76,7 @@ private class SmtpClientHandler(client: Socket) {
         transitionTo(State.Finish, Command.ReceiveData)
       }
       on<Event.OnParseError> {
-        dontTransition(Command.WriteStatus(500, "Syntax error, command unrecognized"))
+        dontTransition(status(500, "Syntax error, command unrecognized"))
       }
     }
 
@@ -76,7 +85,7 @@ private class SmtpClientHandler(client: Socket) {
         transitionTo(State.Helo)
       }
       on<Event.OnParseError> {
-        dontTransition(Command.WriteStatus(500, "Syntax error, command unrecognized"))
+        dontTransition(status(500, "Syntax error, command unrecognized"))
       }
     }
 
