@@ -13,8 +13,8 @@ private const val CommandRcptTo = "RCPT TO"
 private const val CommandQuit = "QUIT"
 
 private fun testCommand(actual: String, expected: String) = actual.toUpperCase() == expected
-private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
 
+private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
 
 private fun unexpectedCommand(actual: String, expected: String) =
   Either.Left(Error("Expected line to start with $expected got $actual"))
@@ -29,7 +29,7 @@ private fun unexpectedNumParams(command: String, number: Int, expected: List<Str
   return Either.Left(Error(message))
 }
 
-private fun stripCommand(line: String) = line.replace("\\s+".toRegex(), " ")
+private fun stripCommand(line: String) = line.trim().replace("\\s+".toRegex(), " ")
 
 private fun readCommand(line: String, separator: Char) =
   with(stripCommand(line)) {
@@ -47,89 +47,59 @@ private fun readCommand(line: String, separator: Char) =
     Pair(command, params)
   }
 
-private fun parseEhlo(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ' ')
-
-  if (!testCommand(command, CommandEhlo)) {
-    return unexpectedCommand(command, CommandEhlo)
+private fun parseEhlo(line: String): Either<Throwable, Event> =
+  readCommand(line, ' ').let { (command, params) ->
+    when {
+      !testCommand(command, CommandEhlo) -> unexpectedCommand(command, CommandEhlo)
+      !testNumParams(params, 1) -> unexpectedNumParams(command, params.size, listOf("domain"))
+      else -> DomainName.parse(params[0]).map(Event::OnEhlo)
+    }
   }
 
-  if (!testNumParams(params, 1)) {
-    return unexpectedNumParams(command, params.size, listOf("domain"))
+private fun parseHelo(line: String): Either<Throwable, Event> =
+  readCommand(line, ' ').let { (command, params) ->
+    when {
+      !testCommand(command, CommandHelo) -> unexpectedCommand(command, CommandHelo)
+      !testNumParams(params, 1) -> unexpectedNumParams(command, params.size, listOf("domain"))
+      else -> DomainName.parse(params[0]).map(Event::OnHelo)
+    }
   }
 
-  return DomainName.parse(params[0]).map(Event::OnEhlo)
-}
-
-private fun parseHelo(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ' ')
-
-  if (!testCommand(command, CommandHelo)) {
-    return unexpectedCommand(command, CommandHelo)
+private fun parseMailFrom(line: String): Either<Throwable, Event> =
+  readCommand(line, ':').let { (command, params) ->
+    when {
+      !testCommand(command, CommandMailFrom) -> unexpectedCommand(command, CommandMailFrom)
+      !testNumParams(params, 1) -> unexpectedNumParams(command, params.size, listOf("e-mail address"))
+      else -> EmailAddress.parse(params[0]).map(Event::OnMailFrom)
+    }
   }
 
-  if (!testNumParams(params, 1)) {
-    return unexpectedNumParams(command, params.size, listOf("domain"))
+private fun parseRcptTo(line: String): Either<Throwable, Event> =
+  readCommand(line, ':').let { (command, params) ->
+    when {
+      !testCommand(command, CommandRcptTo) -> unexpectedCommand(command, CommandRcptTo)
+      !testNumParams(params, 1) -> unexpectedNumParams(command, params.size, listOf("e-mail address"))
+      else -> EmailAddress.parse(params[0]).map(Event::OnRcptTo)
+    }
   }
 
-  return DomainName.parse(params[0]).map(Event::OnHelo)
-}
-
-private fun parseMailFrom(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ':')
-
-  if (!testCommand(command, CommandMailFrom)) {
-    return unexpectedCommand(command, CommandMailFrom)
+private fun parseData(line: String): Either<Throwable, Event> =
+  readCommand(line, ' ').let { (command, params) ->
+    when {
+      !testCommand(command, CommandData) -> unexpectedCommand(command, CommandData)
+      !testNumParams(params, 0) -> unexpectedNumParams(command, params.size, emptyList())
+      else -> Either.Right(Event.OnData)
+    }
   }
 
-  if (!testNumParams(params, 1)) {
-    return unexpectedNumParams(command, params.size, listOf("e-mail address"))
+private fun parseQuit(line: String): Either<Throwable, Event> =
+  readCommand(line, ' ').let { (command, params) ->
+    when {
+      !testCommand(command, CommandQuit) -> unexpectedCommand(command, CommandQuit)
+      !testNumParams(params, 0) -> unexpectedNumParams(command, params.size, emptyList())
+      else -> Either.Right(Event.OnQuit)
+    }
   }
-
-  return EmailAddress.parse(params[0]).map(Event::OnMailFrom)
-}
-
-private fun parseRcptTo(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ':')
-
-  if (!testCommand(command, CommandRcptTo)) {
-    return unexpectedCommand(command, CommandRcptTo)
-  }
-
-  if (!testNumParams(params, 1)) {
-    return unexpectedNumParams(command, params.size, listOf("e-mail address"))
-  }
-
-  return EmailAddress.parse(params[0]).map(Event::OnRcptTo)
-}
-
-private fun parseData(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ' ')
-
-  if (!testCommand(command, CommandData)) {
-    return unexpectedCommand(command, CommandData)
-  }
-
-  if (!testNumParams(params, 0)) {
-    return unexpectedNumParams(command, params.size, emptyList())
-  }
-
-  return Either.Right(Event.OnData)
-}
-
-private fun parseQuit(line: String): Either<Throwable, Event> {
-  val (command, params) = readCommand(line, ' ')
-
-  if (!testCommand(command, CommandQuit)) {
-    return unexpectedCommand(command, CommandQuit)
-  }
-
-  if (!testNumParams(params, 0)) {
-    return unexpectedNumParams(command, params.size, emptyList())
-  }
-
-  return Either.Right(Event.OnQuit)
-}
 
 private val parsers = mapOf(
   CommandData to ::parseData,
@@ -141,7 +111,7 @@ private val parsers = mapOf(
 )
 
 fun parseCommand(line: String): Either<Throwable, Event> {
-  val trimmedLine = line.trim()
+  val trimmedLine = stripCommand(line)
   val maybeKey = parsers.keys.firstOrNull { trimmedLine.startsWith(it, true) }
 
   val parseLine =
