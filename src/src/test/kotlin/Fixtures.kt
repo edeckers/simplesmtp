@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 
 private const val ServerPort = 9999
 
-fun server() = SmtpServer(ServerPort)
+fun server() = SmtpServer(ServerPort).run()
 fun client() = Socket("127.0.0.1", ServerPort)
 
 open class ClientDSL(private val server: SmtpServer, private val client: Socket) : Closeable {
