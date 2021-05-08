@@ -16,14 +16,15 @@ private const val ValidRcptToCommand = "RCPT TO: mailbox@domain.com"
 private const val ValidDataCommand = "DATA"
 private const val ValidQuitCommand = "QUIT"
 
-private fun assertDomainnameMatchesRules(domainName: String?) {
+private fun assertDomainNameMatchesRules(domainName: String?) {
   assertNotNull(domainName)
   assertTrue(domainName.isNotEmpty(), "Domain name length should be at least one character long")
   assertTrue(domainName.matches("[a-zA-Z0-9.-]*".toRegex()), "Domain name contains unexpected characters")
   assertNotSame('-', domainName[0], "Domain cannot start with hyphen")
 }
 
-private fun assertEmailAddressMatchesRules(emailAddress: String) {
+private fun assertEmailAddressMatchesRules(emailAddress: String?) {
+  assertNotNull(emailAddress)
   assertTrue(emailAddress.length >= 3, "E-mail address length should be at least three character long")
   assertTrue(emailAddress.matches("[a-zA-Z0-9.-@]*".toRegex()), "E-mail address contains unexpected characters")
   assertTrue(emailAddress.contains('@'), "E-mail address must contain @")
@@ -32,30 +33,30 @@ private fun assertEmailAddressMatchesRules(emailAddress: String) {
 private inline fun <reified T> toEvent(e: Event): Either<Throwable, T> =
   if (e is T) Either.Right(e) else Either.Left(Error(""))
 
-fun <L, R> succeeds(v: Either<L, R>, message: String) = assertTrue(v.isRight(), message)
-fun <L, R> fails(v: Either<L, R>, message: String) = assertTrue(v.isLeft(), message)
-fun <L, R, S> matches(v: Either<L, R>, map: (b: R) -> S, expected: S, message: String) {
-  val maybeMapped = v.map(map).orNull()
+private fun <L, R> Either<L, R>.succeeds(message: String) = assertTrue(isRight(), message)
+private fun <L, R> Either<L, R>.fails(message: String) = assertTrue(isLeft(), message)
+private fun <L, R, S> Either<L, R>.matches(map: (b: R) -> S, expected: S, message: String) {
+  val maybeMapped = this.map(map).orNull()
 
   assertNotNull(maybeMapped, message)
   assertEquals(expected, maybeMapped, message)
 }
 
-fun <L, R, S : Any, T : KClass<S>> isType(v: Either<L, R>, t: T) =
-  assertEquals(t, v.map { it!!::class }.getOrElse { Unit::class }, "Expected ${t.simpleName}")
+private fun <L, R, S : Any, T : KClass<S>> Either<L, R>.isType(t: T) =
+  assertEquals(t, map { it!!::class }.getOrElse { Unit::class }, "Expected ${t.simpleName}")
 
 class ParserTests {
   // region E-mail address
   @Test
   @Tag(Isolated)
-  fun assert_email_address_validates_input() {
-    val errorOrEmailAddress = EmailAddress.parse("mailbox@domain.com")
+  fun assert_email_address_validates_input() =
+    with(EmailAddress.parse("mailbox@domain.com")) {
+      succeeds("No email address was parsed")
+      matches(EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
+      matches(EmailAddress::domainName, "domain.com", "Unexpected hostname")
 
-    succeeds(errorOrEmailAddress, "No email address was parsed")
-    matches(errorOrEmailAddress, EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
-    matches(errorOrEmailAddress, EmailAddress::domainName, "domain.com", "Unexpected hostname")
-    assertEmailAddressMatchesRules(errorOrEmailAddress.map(EmailAddress::address).getOrElse { "" })
-  }
+      assertEmailAddressMatchesRules(map(EmailAddress::address).orNull())
+    }
   // endregion
 
   // region EHLO
@@ -66,9 +67,9 @@ class ParserTests {
     val ehloWithSingleParameter = parseCommand(ValidEhloCommand)
     val ehloWithMultipleParameters = parseCommand("EHLO infi.nl nu.nl")
 
-    fails(ehloWithoutParameter, "Parsing parameterless EHLO should fail")
-    isType(ehloWithSingleParameter, Event.OnEhlo::class)
-    fails(ehloWithMultipleParameters, "Parsing EHLO with more than a single parameter should fail")
+    ehloWithoutParameter.fails("Parsing parameterless EHLO should fail")
+    ehloWithSingleParameter.isType(Event.OnEhlo::class)
+    ehloWithMultipleParameters.fails("Parsing EHLO with more than a single parameter should fail")
   }
 
   @Test
@@ -81,8 +82,8 @@ class ParserTests {
       .map(Event.OnEhlo::domain)
       .orNull()
 
-    succeeds(ehloWithSingleParameter, "No domainName was parsed")
-    assertDomainnameMatchesRules(maybeDomainName?.name)
+    ehloWithSingleParameter.isType(Event.OnEhlo::class)
+    assertDomainNameMatchesRules(maybeDomainName?.name)
   }
 
   @Test
@@ -95,8 +96,8 @@ class ParserTests {
       .map(Event.OnEhlo::domain)
       .orNull()
 
-    succeeds(ehloWithSingleParameter, "No domainName was parsed")
-    assertDomainnameMatchesRules(maybeDomainName?.name)
+    ehloWithSingleParameter.isType(Event.OnEhlo::class)
+    assertDomainNameMatchesRules(maybeDomainName?.name)
     assertEquals("in-fi.nl", maybeDomainName?.name)
   }
 
@@ -114,7 +115,7 @@ class ParserTests {
         .map(Event.OnEhlo::domain)
         .orNull()
 
-    isType(ehloWithSingleParameter, Event.OnEhlo::class)
+    ehloWithSingleParameter.isType(Event.OnEhlo::class)
     assertEquals("infi.nl", maybeDomainName?.name)
   }
 // endregion
@@ -127,9 +128,9 @@ class ParserTests {
     val heloWithSingleParameter = parseCommand(ValidHeloCommand)
     val heloWithMultipleParameters = parseCommand("HELO infi.nl nu.nl")
 
-    fails(heloWithoutParameter, "Parsing parameterless HELO should fail")
-    isType(heloWithSingleParameter, Event.OnHelo::class)
-    fails(heloWithMultipleParameters, "Parsing HELO with more than a single parameter should fail")
+    heloWithoutParameter.fails("Parsing parameterless HELO should fail")
+    heloWithSingleParameter.isType(Event.OnHelo::class)
+    heloWithMultipleParameters.fails("Parsing HELO with more than a single parameter should fail")
   }
 
   @Test
@@ -142,8 +143,8 @@ class ParserTests {
       .map(Event.OnHelo::domain)
       .orNull()
 
-    succeeds(heloWithSingleParameter, "No domainName was parsed")
-    assertDomainnameMatchesRules(maybeDomainName?.name)
+    heloWithSingleParameter.isType(Event.OnHelo::class)
+    assertDomainNameMatchesRules(maybeDomainName?.name)
   }
 
   @Test
@@ -156,8 +157,8 @@ class ParserTests {
       .map(Event.OnHelo::domain)
       .orNull()
 
-    succeeds(heloWithSingleParameter, "No domainName was parsed")
-    assertDomainnameMatchesRules(maybeDomainName?.name)
+    heloWithSingleParameter.isType(Event.OnHelo::class)
+    assertDomainNameMatchesRules(maybeDomainName?.name)
     assertEquals("in-fi.nl", maybeDomainName?.name)
   }
 
@@ -175,7 +176,7 @@ class ParserTests {
         .map(Event.OnHelo::domain)
         .orNull()
 
-    isType(heloWithSingleParameter, Event.OnHelo::class)
+    heloWithSingleParameter.isType(Event.OnHelo::class)
     assertEquals("infi.nl", maybeDomainName?.name)
   }
   // endregion
@@ -188,12 +189,9 @@ class ParserTests {
     val mailFromWithSingleParameter = parseCommand(ValidMailFromCommand)
     val mailFromWithMultipleParameters = parseCommand("MAIL FROM: yes@no.com some@thing.com")
 
-    fails(mailFromWithoutParameter, "Parsing parameterless MAIL FROM should fail")
-    assertEquals(Event.OnMailFrom::class, mailFromWithSingleParameter.getOrElse { }::class, "Expected OnMailFrom")
-    fails(
-      mailFromWithMultipleParameters,
-      "Parsing MAIL FROM with more than a single parameter should fail"
-    )
+    mailFromWithoutParameter.fails("Parsing parameterless MAIL FROM should fail")
+    mailFromWithSingleParameter.isType(Event.OnMailFrom::class)
+    mailFromWithMultipleParameters.fails("Parsing MAIL FROM with more than a single parameter should fail")
   }
 
   @Test
@@ -201,13 +199,7 @@ class ParserTests {
   fun assert_mail_from_command_accepts_single_email_address_parameter() {
     val mailFromWithSingleParameter = parseCommand(ValidMailFromCommand)
 
-    val maybeEmailAddress =
-      mailFromWithSingleParameter
-        .flatMap { toEvent<Event.OnMailFrom>(it) }
-        .map(Event.OnMailFrom::emailAddress)
-        .orNull()
-
-    assertNotNull(maybeEmailAddress, "No email address was parsed")
+    mailFromWithSingleParameter.isType(Event.OnMailFrom::class)
   }
 
   @Test
@@ -219,10 +211,9 @@ class ParserTests {
       .flatMap { toEvent<Event.OnMailFrom>(it) }
       .map(Event.OnMailFrom::emailAddress)
 
-    succeeds(mailFromWithSingleParameter, "No email address was parsed")
-    matches(maybeEmailAddress, EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
-    matches(maybeEmailAddress, EmailAddress::domainName, "domain.com", "Unexpected hostname")
-    assertEmailAddressMatchesRules(maybeEmailAddress.map(EmailAddress::address).getOrElse { "" })
+    mailFromWithSingleParameter.isType(Event.OnMailFrom::class)
+    maybeEmailAddress.matches(EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
+    maybeEmailAddress.matches(EmailAddress::domainName, "domain.com", "Unexpected hostname")
   }
 
   @Test
@@ -230,7 +221,7 @@ class ParserTests {
   fun assert_mail_from_command_case_is_ignored() {
     val mailFromWithSingleParameter = parseCommand("mAiL fRoM: mailbox@domain.com")
 
-    isType(mailFromWithSingleParameter, Event.OnMailFrom::class)
+    mailFromWithSingleParameter.isType(Event.OnMailFrom::class)
   }
   // endregion
 
@@ -242,12 +233,9 @@ class ParserTests {
     val mailFromWithSingleParameter = parseCommand(ValidRcptToCommand)
     val mailFromWithMultipleParameters = parseCommand("RCPT TO: yes@no.com some@thing.com")
 
-    fails(mailFromWithoutParameter, "Parsing parameterless RCPT TO should fail")
-    isType(mailFromWithSingleParameter, Event.OnRcptTo::class)
-    fails(
-      mailFromWithMultipleParameters,
-      "Parsing RCPT TO with more than a single parameter should fail"
-    )
+    mailFromWithoutParameter.fails("Parsing parameterless RCPT TO should fail")
+    mailFromWithSingleParameter.isType(Event.OnRcptTo::class)
+    mailFromWithMultipleParameters.fails("Parsing RCPT TO with more than a single parameter should fail")
   }
 
   @Test
@@ -255,7 +243,7 @@ class ParserTests {
   fun assert_rcpt_to_command_accepts_single_email_address_parameter() {
     val mailFromWithSingleParameter = parseCommand(ValidRcptToCommand)
 
-    isType(mailFromWithSingleParameter, Event.OnRcptTo::class)
+    mailFromWithSingleParameter.isType(Event.OnRcptTo::class)
   }
 
   @Test
@@ -267,10 +255,9 @@ class ParserTests {
       .flatMap { toEvent<Event.OnRcptTo>(it) }
       .map(Event.OnRcptTo::emailAddress)
 
-    isType(mailFromWithSingleParameter, Event.OnRcptTo::class)
-    matches(errorOrMailAddress, EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
-    matches(errorOrMailAddress, EmailAddress::domainName, "domain.com", "Unexpected hostname")
-    assertEmailAddressMatchesRules(errorOrMailAddress.map(EmailAddress::address).getOrElse { "" })
+    mailFromWithSingleParameter.isType(Event.OnRcptTo::class)
+    errorOrMailAddress.matches(EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
+    errorOrMailAddress.matches(EmailAddress::domainName, "domain.com", "Unexpected hostname")
   }
 
   @Test
@@ -278,7 +265,7 @@ class ParserTests {
   fun assert_rcpt_to_command_case_is_ignored() {
     val mailFromWithSingleParameter = parseCommand("rCpT tO: mailbox@domain.com")
 
-    isType(mailFromWithSingleParameter, Event.OnRcptTo::class)
+    mailFromWithSingleParameter.isType(Event.OnRcptTo::class)
   }
   // endregion
 
@@ -290,9 +277,9 @@ class ParserTests {
     val dataWithSingleParameter = parseCommand("DATA infi.nl")
     val dataWithMultipleParameters = parseCommand("DATA infi.nl nu.nl")
 
-    isType(dataWithoutParameter, Event.OnData::class)
-    fails(dataWithSingleParameter, "Parsing DATA with a single parameter should fail")
-    fails(dataWithMultipleParameters, "Parsing DATA with more than a single parameter should fail")
+    dataWithoutParameter.isType(Event.OnData::class)
+    dataWithSingleParameter.fails("Parsing DATA with a single parameter should fail")
+    dataWithMultipleParameters.fails("Parsing DATA with more than a single parameter should fail")
   }
 
   @Test
@@ -300,7 +287,7 @@ class ParserTests {
   fun assert_data_command_spaces_are_stripped() {
     val dataWithoutParameter = parseCommand("   DATA    ")
 
-    isType(dataWithoutParameter, Event.OnData::class)
+    dataWithoutParameter.isType(Event.OnData::class)
   }
 
   @Test
@@ -308,7 +295,7 @@ class ParserTests {
   fun assert_data_command_case_is_ignored() {
     val dataWithoutParameters = parseCommand("dAtA")
 
-    isType(dataWithoutParameters, Event.OnData::class)
+    dataWithoutParameters.isType(Event.OnData::class)
   }
   // endregion
 
@@ -320,9 +307,9 @@ class ParserTests {
     val quitWithSingleParameter = parseCommand("QUIT infi.nl")
     val quitWithMultipleParameters = parseCommand("QUIT infi.nl nu.nl")
 
-    isType(quitWithoutParameter, Event.OnQuit::class)
-    fails(quitWithSingleParameter, "Parsing QUIT with a single parameter should fail")
-    fails(quitWithMultipleParameters, "Parsing QUIT with more than a single parameter should fail")
+    quitWithoutParameter.isType(Event.OnQuit::class)
+    quitWithSingleParameter.fails("Parsing QUIT with a single parameter should fail")
+    quitWithMultipleParameters.fails("Parsing QUIT with more than a single parameter should fail")
   }
 
   @Test
@@ -330,7 +317,7 @@ class ParserTests {
   fun assert_quit_command_spaces_are_stripped() {
     val quitWithoutParameter = parseCommand("   QUIT    ")
 
-    isType(quitWithoutParameter, Event.OnQuit::class)
+    quitWithoutParameter.isType(Event.OnQuit::class)
   }
 
   @Test
@@ -338,7 +325,7 @@ class ParserTests {
   fun assert_quit_command_case_is_ignored() {
     val quitWithoutParameters = parseCommand("qUiT")
 
-    isType(quitWithoutParameters, Event.OnQuit::class)
+    quitWithoutParameters.isType(Event.OnQuit::class)
   }
   // endregion
 }
