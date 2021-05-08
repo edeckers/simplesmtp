@@ -120,7 +120,7 @@ private class SmtpClientHandler(client: Socket) : Closeable {
 
           logger.debug("Started data retrieval")
 
-          val lastThreeLines = CircularQueue(3)
+          val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
           while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
             val line = reader.nextLine()
             lastThreeLines.push(line)
