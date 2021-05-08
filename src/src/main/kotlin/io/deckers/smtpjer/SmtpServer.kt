@@ -129,26 +129,30 @@ private class SmtpClientHandler(client: Socket) : Closeable {
     }
   }
 
+  private tailrec fun nextState() {
+    try {
+      val errorOrParsedCommand = parseCommand(reader.nextLine())
+
+      val process =
+        errorOrParsedCommand
+          .fold(
+            { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
+            { o -> { stateMachine.transition(o) } }
+          )
+
+      process()
+    } catch (e: NoSuchElementException) {
+    }
+
+    nextState()
+  }
+
   fun run() {
     logger.debug("Running ${SmtpClientHandler::class.simpleName}")
 
-    var transaction = stateMachine.transition(Event.OnConnect)
+    stateMachine.transition(Event.OnConnect)
 
-    try {
-      while (transaction is StateMachine.Transition.Valid) {
-        val errorOrParsedCommand = parseCommand(reader.nextLine())
-
-        val process =
-          errorOrParsedCommand
-            .fold(
-              { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
-              { o -> { stateMachine.transition(o) } }
-            )
-
-        transaction = process()
-      }
-    } catch (e: NoSuchElementException) {
-    }
+    nextState()
 
     logger.debug("Ran ${SmtpClientHandler::class.simpleName}")
   }
@@ -162,13 +166,13 @@ private class SmtpClientHandler(client: Socket) : Closeable {
 }
 
 private fun runSmtpClientHandler(socket: Socket) = thread {
-    logger.info("Client connected (host={})", socket.inetAddress.hostAddress)
+  logger.info("Client connected (host={})", socket.inetAddress.hostAddress)
 
-    SmtpClientHandler(socket).use { handler ->
-      handler.run()
-    }
+  SmtpClientHandler(socket).use { handler ->
+    handler.run()
+  }
 
-    logger.info("Client disconnected (host={})", socket.inetAddress.hostAddress)
+  logger.info("Client disconnected (host={})", socket.inetAddress.hostAddress)
 }
 
 class SmtpServer constructor(port: Int) : Closeable {
@@ -182,18 +186,22 @@ class SmtpServer constructor(port: Int) : Closeable {
     socket.close()
   }
 
+  private tailrec fun waitForConnections() {
+    try {
+      val client = socket.accept()
+
+      runSmtpClientHandler(client)
+    } catch (e: SocketException) {
+    }
+
+    waitForConnections()
+  }
+
   init {
     logger.info("Server listening (port={})", socket.localPort)
 
     thread {
-      while (true) {
-        try {
-          val client = socket.accept()
-
-          runSmtpClientHandler(client)
-        } catch (e: SocketException) {
-        }
-      }
+      waitForConnections()
     }
   }
 }
