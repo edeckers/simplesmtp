@@ -4,7 +4,7 @@ import arrow.core.Option
 import arrow.core.getOrElse
 import com.tinder.StateMachine
 import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
-import io.deckers.smtpjer.parsers.parse
+import io.deckers.smtpjer.parsers.parseCommand
 import io.deckers.smtpjer.state_machine.Command
 import io.deckers.smtpjer.state_machine.Event
 import io.deckers.smtpjer.state_machine.State
@@ -13,21 +13,16 @@ import java.io.Closeable
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.util.*
+import kotlin.NoSuchElementException
 import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
 
-const val CommandData = "DATA"
-const val CommandEhlo = "EHLO"
-const val CommandHelo = "HELO"
-const val CommandMailFrom = "MAIL FROM"
-const val CommandRcptTo = "RCPT TO"
-const val CommandQuit = "QUIT"
-
 private val EndOfDataStreamPattern = arrayOf("", ".", "")
 
-private class SmtpClientHandler(client: Socket) {
+private class SmtpClientHandler(client: Socket) : Closeable {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
   private val processorFactory = FileDataProcessorFactory()
@@ -35,7 +30,7 @@ private class SmtpClientHandler(client: Socket) {
   private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
     Command.WriteStatus(
       code,
-      Option(extendedCode)
+      Option.fromNullable(extendedCode)
         .map { "$it $message" }
         .getOrElse { message })
 
@@ -135,49 +130,70 @@ private class SmtpClientHandler(client: Socket) {
   }
 
   fun run() {
+    logger.debug("Running ${SmtpClientHandler::class.simpleName}")
+
     var transaction = stateMachine.transition(Event.OnConnect)
 
-    while (transaction is StateMachine.Transition.Valid) {
-      val errorOrParsedCommand = parse(reader.nextLine())
+    try {
+      while (transaction is StateMachine.Transition.Valid) {
+        val errorOrParsedCommand = parseCommand(reader.nextLine())
 
-      val process =
-        errorOrParsedCommand
-          .fold(
-            { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
-            { o -> { stateMachine.transition(o) } }
-          )
+        val process =
+          errorOrParsedCommand
+            .fold(
+              { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
+              { o -> { stateMachine.transition(o) } }
+            )
 
-      transaction = process()
-    }
-  }
-}
-
-class SmtpServer(port: Int) : Closeable {
-  private val server = ServerSocket(port)
-
-  init {
-    logger.info("Server listening (port={})", server.localPort)
-
-    thread {
-      while (true) {
-        val client = server.accept()
-
-        thread {
-          client.use {
-            logger.info("Client connected (host={})", it.inetAddress.hostAddress)
-
-            SmtpClientHandler(it).run()
-          }
-        }
+        transaction = process()
       }
+    } catch (e: NoSuchElementException) {
     }
+
+    logger.debug("Ran ${SmtpClientHandler::class.simpleName}")
   }
 
   override fun close() {
-    if (server.isClosed) {
+    logger.debug("Closing ${SmtpClientHandler::class.simpleName}")
+    reader.close()
+    writer.close()
+    logger.debug("Closed ${SmtpClientHandler::class.simpleName}")
+  }
+}
+
+private fun runSmtpClientHandler(socket: Socket) = thread {
+    logger.info("Client connected (host={})", socket.inetAddress.hostAddress)
+
+    SmtpClientHandler(socket).use { handler ->
+      handler.run()
+    }
+
+    logger.info("Client disconnected (host={})", socket.inetAddress.hostAddress)
+}
+
+class SmtpServer constructor(port: Int) : Closeable {
+  private val socket = ServerSocket(port)
+
+  override fun close() {
+    if (socket.isClosed) {
       return
     }
 
-    server.close()
+    socket.close()
+  }
+
+  init {
+    logger.info("Server listening (port={})", socket.localPort)
+
+    thread {
+      while (true) {
+        try {
+          val client = socket.accept()
+
+          runSmtpClientHandler(client)
+        } catch (e: SocketException) {
+        }
+      }
+    }
   }
 }

@@ -2,7 +2,14 @@ package io.deckers.smtpjer.parsers
 
 import arrow.core.Either
 import io.deckers.smtpjer.*
-import io.deckers.smtpjer.state_machine.Event
+import io.deckers.smtpjer.state_machine.*
+
+private const val CommandData = "DATA"
+private const val CommandEhlo = "EHLO"
+private const val CommandHelo = "HELO"
+private const val CommandMailFrom = "MAIL FROM"
+private const val CommandRcptTo = "RCPT TO"
+private const val CommandQuit = "QUIT"
 
 private fun parseEhlo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
@@ -95,7 +102,7 @@ private val parsers = mapOf(
   CommandRcptTo to ::parseRcptTo,
 )
 
-fun parse(line: String): Either<Throwable, Event> {
+fun parseCommand(line: String): Either<Throwable, Event> {
   val trimmedLine = line.trim()
   val maybeKey = parsers.keys.firstOrNull { trimmedLine.startsWith(it, true) }
 
