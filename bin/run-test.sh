@@ -2,8 +2,7 @@
 
 PORT=${PORT:-9999}
 
-echo "
-ehlo domain.com
+echo "ehlo domain.com
 helo domain.com
 mail from: mailbox@domain.com
 rcpt to: ely@infi.nl

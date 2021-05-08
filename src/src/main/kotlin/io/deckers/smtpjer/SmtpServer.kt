@@ -34,6 +34,15 @@ private class SmtpClientHandler(client: Socket) : Closeable {
         .map { "$it $message" }
         .getOrElse { message })
 
+  private fun <S : State> StateMachine.GraphBuilder<State, Event, Command>.StateDefinitionBuilder<S>.onEscalation() {
+    on<Event.OnParseError> {
+      dontTransition(status(500, "Syntax error, command unrecognized"))
+    }
+    on<Event.OnQuit> {
+      dontTransition(Command.Quit)
+    }
+  }
+
   private val stateMachine = StateMachine.create<State, Event, Command> {
     initialState(State.Start)
 
@@ -41,9 +50,8 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       on<Event.OnConnect> {
         transitionTo(State.Helo, status(220, "${InetAddress.getLocalHost()} Service ready"))
       }
-      on<Event.OnQuit> {
-        dontTransition(Command.Quit)
-      }
+
+      onEscalation()
     }
 
     state<State.Helo> {
@@ -53,18 +61,16 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       on<Event.OnHelo> {
         transitionTo(State.MailFrom(it.domain), status(250, "Ok"))
       }
-      on<Event.OnQuit> {
-        dontTransition(Command.Quit)
-      }
+
+      onEscalation()
     }
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
         transitionTo(State.RcptTo(domain, it.emailAddress), status(250, "Ok", "2.1.0"))
       }
-      on<Event.OnQuit> {
-        dontTransition(Command.Quit)
-      }
+
+      onEscalation()
     }
 
     state<State.RcptTo> {
@@ -73,21 +79,16 @@ private class SmtpClientHandler(client: Socket) : Closeable {
           State.Data(domain, mailFrom, it.emailAddress), status(250, "Ok", "2.1.5"),
         )
       }
-      on<Event.OnQuit> {
-        dontTransition(Command.Quit)
-      }
+
+      onEscalation()
     }
 
     state<State.Data> {
       on<Event.OnData> {
         transitionTo(State.Helo, Command.ReceiveData)
       }
-      on<Event.OnParseError> {
-        dontTransition(status(500, "Syntax error, command unrecognized"))
-      }
-      on<Event.OnQuit> {
-        dontTransition(Command.Quit)
-      }
+
+      onEscalation()
     }
 
     onTransition {
