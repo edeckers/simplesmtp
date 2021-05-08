@@ -4,6 +4,7 @@ import arrow.core.getOrElse
 import io.deckers.smtpjer.parsers.EmailAddress
 import io.deckers.smtpjer.state_machine.Event
 import io.deckers.smtpjer.parsers.parseCommand
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import kotlin.test.*
 
@@ -17,6 +18,7 @@ private const val ValidQuitCommand = "QUIT"
 class ParserTests {
   // region E-mail address
   @Test
+  @Tag(Isolated)
   fun assert_email_address_validates_input() {
     val errorOrEmailAddress = EmailAddress.parse("mailbox@domain.com")
 
@@ -25,12 +27,13 @@ class ParserTests {
     assertNotNull(maybeEmailAddress, "No email address was parsed")
     assertEquals("mailbox", maybeEmailAddress.mailbox, "Unexpected mailbox")
     assertEquals("domain.com", maybeEmailAddress.domainName, "Unexpected hostname")
-    assert_email_address_matches_rules(maybeEmailAddress.address)
+    assertEmailAddressMatchesRules(maybeEmailAddress.address)
   }
   // endregion
 
   // region EHLO
   @Test
+  @Tag(Isolated)
   fun assert_ehlo_command_recognized_with_exactly_one_parameter() {
     val ehloWithoutParameter = parseCommand("EHLO")
     val ehloWithSingleParameter = parseCommand(ValidEhloCommand)
@@ -42,6 +45,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_ehlo_command_accepts_single_domain_parameter() {
     val ehloWithSingleParameter = parseCommand(ValidEhloCommand)
 
@@ -51,10 +55,11 @@ class ParserTests {
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
-    assert_domainName_matches_rules(domainName.name)
+    assertDomainnameMatchesRules(domainName.name)
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_ehlo_command_spaces_are_stripped() {
     val ehloWithSingleParameter = parseCommand("   EHLO    in-fi.nl   ")
 
@@ -64,11 +69,12 @@ class ParserTests {
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
-    assert_domainName_matches_rules(domainName.name)
+    assertDomainnameMatchesRules(domainName.name)
     assertEquals("in-fi.nl", domainName.name)
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_ehlo_command_case_is_ignored() {
     val ehloWithSingleParameter = parseCommand("eHlO infi.nl")
 
@@ -90,6 +96,7 @@ class ParserTests {
 
   // region HELO
   @Test
+  @Tag(Isolated)
   fun assert_helo_command_recognized_with_exactly_one_parameter() {
     val heloWithoutParameter = parseCommand("HELO")
     val heloWithSingleParameter = parseCommand(ValidHeloCommand)
@@ -101,6 +108,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_helo_command_accepts_single_domain_parameter() {
     val heloWithSingleParameter = parseCommand(ValidHeloCommand)
 
@@ -110,10 +118,11 @@ class ParserTests {
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
-    assert_domainName_matches_rules(domainName.name)
+    assertDomainnameMatchesRules(domainName.name)
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_helo_command_spaces_are_stripped() {
     val heloWithSingleParameter = parseCommand("   HELO    in-fi.nl   ")
 
@@ -123,11 +132,12 @@ class ParserTests {
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
-    assert_domainName_matches_rules(domainName.name)
+    assertDomainnameMatchesRules(domainName.name)
     assertEquals("in-fi.nl", domainName.name)
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_helo_command_case_is_ignored() {
     val heloWithSingleParameter = parseCommand("helO infi.nl")
 
@@ -149,6 +159,7 @@ class ParserTests {
 
   // region MAIL FROM
   @Test
+  @Tag(Isolated)
   fun assert_mail_from_command_recognized_with_exactly_one_parameter() {
     val mailFromWithoutParameter = parseCommand("MAIL FROM")
     val mailFromWithSingleParameter = parseCommand(ValidMailFromCommand)
@@ -163,6 +174,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_mail_from_command_accepts_single_email_address_parameter() {
     val mailFromWithSingleParameter = parseCommand(ValidMailFromCommand)
 
@@ -176,6 +188,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_mail_from_command_spaces_are_stripped() {
     val mailFromWithSingleParameter = parseCommand("   MAIL FROM:    mailbox@domain.com   ")
 
@@ -190,6 +203,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_mail_from_command_case_is_ignored() {
     val mailFromWithSingleParameter = parseCommand("mAiL fRoM: mailbox@domain.com")
 
@@ -205,6 +219,7 @@ class ParserTests {
 
   // region RCPT TO
   @Test
+  @Tag(Isolated)
   fun assert_rcpt_to_command_recognized_with_exactly_one_parameter() {
     val mailFromWithoutParameter = parseCommand("RCPT TO")
     val mailFromWithSingleParameter = parseCommand(ValidRcptToCommand)
@@ -219,6 +234,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_rcpt_to_command_accepts_single_email_address_parameter() {
     val mailFromWithSingleParameter = parseCommand(ValidRcptToCommand)
 
@@ -232,6 +248,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_rcpt_to_command_spaces_are_stripped() {
     val mailFromWithSingleParameter = parseCommand("   RCPT TO:    mailbox@domain.com   ")
 
@@ -246,6 +263,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_rcpt_to_command_case_is_ignored() {
     val mailFromWithSingleParameter = parseCommand("rCpT tO: mailbox@domain.com")
 
@@ -261,6 +279,7 @@ class ParserTests {
 
   // region DATA
   @Test
+  @Tag(Isolated)
   fun assert_data_command_recognized_with_exactly_one_parameter() {
     val dataWithoutParameter = parseCommand(ValidDataCommand)
     val dataWithSingleParameter = parseCommand("DATA infi.nl")
@@ -272,6 +291,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_data_command_spaces_are_stripped() {
     val dataWithoutParameter = parseCommand("   DATA    ")
 
@@ -283,6 +303,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_data_command_case_is_ignored() {
     val dataWithoutParameters = parseCommand("dAtA")
 
@@ -297,6 +318,7 @@ class ParserTests {
 
   // region QUIT
   @Test
+  @Tag(Isolated)
   fun assert_quit_command_recognized_with_exactly_one_parameter() {
     val quitWithoutParameter = parseCommand(ValidQuitCommand)
     val quitWithSingleParameter = parseCommand("QUIT infi.nl")
@@ -308,6 +330,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_quit_command_spaces_are_stripped() {
     val quitWithoutParameter = parseCommand("   QUIT    ")
 
@@ -319,6 +342,7 @@ class ParserTests {
   }
 
   @Test
+  @Tag(Isolated)
   fun assert_quit_command_case_is_ignored() {
     val quitWithoutParameters = parseCommand("qUiT")
 
@@ -331,13 +355,13 @@ class ParserTests {
   }
   // endregion
 
-  private fun assert_domainName_matches_rules(domainName: String) {
+  private fun assertDomainnameMatchesRules(domainName: String) {
     assertTrue(domainName.isNotEmpty(), "Domain name length should be at least one character long")
     assertTrue(domainName.matches("[a-zA-Z0-9.-]*".toRegex()), "Domain name contains unexpected characters")
     assertNotSame('-', domainName[0], "Domain cannot start with hyphen")
   }
 
-  private fun assert_email_address_matches_rules(emailAddress: String) {
+  private fun assertEmailAddressMatchesRules(emailAddress: String) {
     assertTrue(emailAddress.length >= 3, "E-mail address length should be at least three character long")
     assertTrue(emailAddress.matches("[a-zA-Z0-9.-@]*".toRegex()), "E-mail address contains unexpected characters")
     assertTrue(emailAddress.contains('@'), "E-mail address must contain @")

@@ -1,7 +1,9 @@
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 class ProtocolTests {
   @Test
+  @Tag(EndToEnd)
   fun assert_ehlo_returns_500() = withClient {
     // Arrange
     val welcomeResponse = read()
@@ -16,6 +18,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_helo_returns_250() = withClient {
     // Arrange
     val welcomeResponse = read()
@@ -30,6 +33,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_mail_from_returns_250() = withClient {
     // Arrange
     discard()
@@ -45,6 +49,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_rcpt_to_returns_250() = withClient {
     // Arrange
     discard()
@@ -62,6 +67,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_data_returns_354() = withClient {
     // Arrange
     discard()
@@ -81,6 +87,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_data_finish_returns_250() = withClient {
     // Arrange
     discard()
@@ -110,6 +117,7 @@ class ProtocolTests {
   }
 
   @Test
+  @Tag(EndToEnd)
   fun assert_data_obscured_kill_sequence_return_250() = withClient {
     // Arrange
     runToData()
