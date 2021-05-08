@@ -1,7 +1,8 @@
 package io.deckers.smtpjer.parsers
 
 import arrow.core.Either
-import io.deckers.smtpjer.*
+import arrow.core.Option
+import arrow.core.getOrElse
 import io.deckers.smtpjer.state_machine.*
 
 private const val CommandData = "DATA"
@@ -14,9 +15,26 @@ private const val CommandQuit = "QUIT"
 private fun testCommand(actual: String, expected: String) = actual.toUpperCase() == expected
 private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
 
+private fun stripCommand(line: String) = line.replace("\\s+".toRegex(), " ")
+
+private fun readCommand(line: String, separator: Char) =
+  with(stripCommand(line)) {
+    val firstOccurrence = indexOfFirst { c -> c == separator }
+    val index = if (firstOccurrence > -1) firstOccurrence else length
+
+    val command = substring(0, index)
+
+    val params =
+      Option(substring(kotlin.math.min(index + 1, length)))
+        .filter(String::isNotEmpty)
+        .map { it.trim().split("\\s+".toRegex()) }
+        .getOrElse { emptyList() }
+
+    Pair(command, params)
+  }
+
 private fun parseEhlo(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandEhlo)) {
     return Either.Left(Error("Expected line to start with $CommandEhlo got $command"))
@@ -30,8 +48,7 @@ private fun parseEhlo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseHelo(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandHelo)) {
     return Either.Left(Error("Expected line to start with $CommandHelo got $command"))
@@ -45,10 +62,7 @@ private fun parseHelo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseMailFrom(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, rest) = strippedLine.split(":").map { it.trim() }.destructure()
-
-  val params = if (rest.isNotEmpty()) rest[0].trim().split("\\s+".toRegex()) else emptyList()
+  val (command, params) = readCommand(line, ':')
 
   if (!testCommand(command, CommandMailFrom)) {
     return Either.Left(Error("Expected line to start with $CommandMailFrom got $command"))
@@ -62,8 +76,7 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> {
 }
 
 private fun parseRcptTo(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, params) = strippedLine.split(":").map { it.trim() }.destructure()
+  val (command, params) = readCommand(line, ':')
 
   if (!testCommand(command, CommandRcptTo)) {
     return Either.Left(Error("Expected line to start with $CommandRcptTo got $command"))
@@ -77,8 +90,7 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
 }
 
 private fun parseData(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandData)) {
     return Either.Left(Error("Expected line to start with $CommandData got $command"))
@@ -92,11 +104,10 @@ private fun parseData(line: String): Either<Throwable, Event> {
 }
 
 private fun parseQuit(line: String): Either<Throwable, Event> {
-  val strippedLine = stripCommand(line)
-  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = readCommand(line, ' ')
 
   if (command.toUpperCase() != CommandQuit) {
-    return Either.Left(Error("Expected line to start with $CommandQuit got $strippedLine"))
+    return Either.Left(Error("Expected line to start with $CommandQuit got $command"))
   }
 
   if (!testNumParams(params, 0)) {
@@ -105,8 +116,6 @@ private fun parseQuit(line: String): Either<Throwable, Event> {
 
   return Either.Right(Event.OnQuit)
 }
-
-private fun stripCommand(line: String) = line.replace("\\s+".toRegex(), " ")
 
 private val parsers = mapOf(
   CommandData to ::parseData,

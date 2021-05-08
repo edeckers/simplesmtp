@@ -226,7 +226,11 @@ class ParserTests {
     val mailFromWithMultipleParameters = parseCommand("RCPT TO: yes@no.com some@thing.com")
 
     assertTrue(mailFromWithoutParameter.isLeft(), "Parsing parameterless RCPT TO should fail")
-    assertEquals(Event.OnRcptTo::class, mailFromWithSingleParameter.getOrElse { }::class, "Expected OnRcptTo")
+    assertEquals(
+      Event.OnRcptTo::class,
+      mailFromWithSingleParameter.getOrElse { }::class,
+      "Expected ${Event.OnRcptTo::class.simpleName}"
+    )
     assertTrue(
       mailFromWithMultipleParameters.isLeft(),
       "Parsing RCPT TO with more than a single parameter should fail"
@@ -285,7 +289,11 @@ class ParserTests {
     val dataWithSingleParameter = parseCommand("DATA infi.nl")
     val dataWithMultipleParameters = parseCommand("DATA infi.nl nu.nl")
 
-    assertEquals(Event.OnData::class, dataWithoutParameter.getOrElse { }::class, "Parsing parameterless DATA should succeed")
+    assertEquals(
+      Event.OnData::class,
+      dataWithoutParameter.getOrElse { }::class,
+      "Parsing parameterless DATA should succeed"
+    )
     assertTrue(dataWithSingleParameter.isLeft(), "Parsing DATA with a single parameter should fail")
     assertTrue(dataWithMultipleParameters.isLeft(), "Parsing DATA with more than a single parameter should fail")
   }
@@ -324,7 +332,11 @@ class ParserTests {
     val quitWithSingleParameter = parseCommand("QUIT infi.nl")
     val quitWithMultipleParameters = parseCommand("QUIT infi.nl nu.nl")
 
-    assertEquals(Event.OnQuit::class, quitWithoutParameter.getOrElse { }::class, "Parsing parameterless QUIT should succeed")
+    assertEquals(
+      Event.OnQuit::class,
+      quitWithoutParameter.getOrElse { }::class,
+      "Parsing parameterless QUIT should succeed"
+    )
     assertTrue(quitWithSingleParameter.isLeft(), "Parsing QUIT with a single parameter should fail")
     assertTrue(quitWithMultipleParameters.isLeft(), "Parsing QUIT with more than a single parameter should fail")
   }
