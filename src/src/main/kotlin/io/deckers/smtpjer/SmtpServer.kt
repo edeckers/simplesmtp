@@ -200,17 +200,18 @@ class SmtpServer constructor(port: Int) : Closeable {
   }
 
   private tailrec fun waitForConnections() {
-    try {
+    val errorOrResult = Either.catch {
       logger.info("Waiting for connections on port (port={})", socket.localPort)
       val client = socket.accept()
       logger.info("Received connection on port (port={})", socket.localPort)
 
       runSmtpClientHandler(client)
-    } catch (e: SocketException) {
-      return
     }
 
-    waitForConnections()
+    when (errorOrResult) {
+      is Either.Left -> return
+      else -> waitForConnections()
+    }
   }
 
   fun run(): SmtpServer {
