@@ -15,6 +15,20 @@ private const val CommandQuit = "QUIT"
 private fun testCommand(actual: String, expected: String) = actual.toUpperCase() == expected
 private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
 
+
+private fun unexpectedCommand(actual: String, expected: String) =
+  Either.Left(Error("Expected line to start with $expected got $actual"))
+
+private fun unexpectedNumParams(command: String, number: Int, expected: List<String>): Either.Left<Error> {
+  val message =
+    if (expected.size == 1)
+      "$command takes a single parameter (parameter=${expected.first()}})"
+    else
+      "$command takes ${expected.size} parameters (parameters=${expected.joinToString(", ")})"
+
+  return Either.Left(Error(message))
+}
+
 private fun stripCommand(line: String) = line.replace("\\s+".toRegex(), " ")
 
 private fun readCommand(line: String, separator: Char) =
@@ -37,11 +51,11 @@ private fun parseEhlo(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandEhlo)) {
-    return Either.Left(Error("Expected line to start with $CommandEhlo got $command"))
+    return unexpectedCommand(command, CommandEhlo)
   }
 
   if (!testNumParams(params, 1)) {
-    return Either.Left(Error("$CommandEhlo takes a single parameter (parameter=domain)"))
+    return unexpectedNumParams(command, params.size, listOf("domain"))
   }
 
   return DomainName.parse(params[0]).map(Event::OnEhlo)
@@ -51,11 +65,11 @@ private fun parseHelo(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandHelo)) {
-    return Either.Left(Error("Expected line to start with $CommandHelo got $command"))
+    return unexpectedCommand(command, CommandHelo)
   }
 
   if (!testNumParams(params, 1)) {
-    return Either.Left(Error("$CommandHelo takes a single parameter (parameter=domain)"))
+    return unexpectedNumParams(command, params.size, listOf("domain"))
   }
 
   return DomainName.parse(params[0]).map(Event::OnHelo)
@@ -65,11 +79,11 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ':')
 
   if (!testCommand(command, CommandMailFrom)) {
-    return Either.Left(Error("Expected line to start with $CommandMailFrom got $command"))
+    return unexpectedCommand(command, CommandMailFrom)
   }
 
   if (!testNumParams(params, 1)) {
-    return Either.Left(Error("$CommandMailFrom takes a single parameter (parameter=e-mail address)"))
+    return unexpectedNumParams(command, params.size, listOf("e-mail address"))
   }
 
   return EmailAddress.parse(params[0]).map(Event::OnMailFrom)
@@ -79,11 +93,11 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ':')
 
   if (!testCommand(command, CommandRcptTo)) {
-    return Either.Left(Error("Expected line to start with $CommandRcptTo got $command"))
+    return unexpectedCommand(command, CommandRcptTo)
   }
 
   if (!testNumParams(params, 1)) {
-    return Either.Left(Error("$CommandRcptTo takes a single parameter (parameter=e-mail address)"))
+    return unexpectedNumParams(command, params.size, listOf("e-mail address"))
   }
 
   return EmailAddress.parse(params[0]).map(Event::OnRcptTo)
@@ -93,11 +107,11 @@ private fun parseData(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ' ')
 
   if (!testCommand(command, CommandData)) {
-    return Either.Left(Error("Expected line to start with $CommandData got $command"))
+    return unexpectedCommand(command, CommandData)
   }
 
   if (!testNumParams(params, 0)) {
-    return Either.Left(Error("$CommandData takes zero parameters"))
+    return unexpectedNumParams(command, params.size, emptyList())
   }
 
   return Either.Right(Event.OnData)
@@ -106,12 +120,12 @@ private fun parseData(line: String): Either<Throwable, Event> {
 private fun parseQuit(line: String): Either<Throwable, Event> {
   val (command, params) = readCommand(line, ' ')
 
-  if (command.toUpperCase() != CommandQuit) {
-    return Either.Left(Error("Expected line to start with $CommandQuit got $command"))
+  if (!testCommand(command, CommandQuit)) {
+    return unexpectedCommand(command, CommandQuit)
   }
 
   if (!testNumParams(params, 0)) {
-    return Either.Left(Error("$CommandData takes zero parameters"))
+    return unexpectedNumParams(command, params.size, emptyList())
   }
 
   return Either.Right(Event.OnQuit)
