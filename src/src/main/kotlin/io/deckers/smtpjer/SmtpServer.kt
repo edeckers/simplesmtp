@@ -1,5 +1,6 @@
 package io.deckers.smtpjer
 
+import arrow.core.Either
 import arrow.core.Option
 import arrow.core.getOrElse
 import com.tinder.StateMachine
@@ -15,7 +16,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.util.*
-import kotlin.NoSuchElementException
 import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
@@ -140,22 +140,24 @@ private class SmtpClientHandler(client: Socket) : Closeable {
     }
   }
 
-  private tailrec fun nextState() {
-    try {
+  private tailrec fun transitionToNextState(): Either<Throwable, StateMachine.Transition<State, Event, Command>> {
+    val errorOrResult = Either.catch {
       val errorOrParsedCommand = parseCommand(reader.nextLine())
 
-      val process =
+      val processParsedCommand =
         errorOrParsedCommand
           .fold(
             { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
             { o -> { stateMachine.transition(o) } }
           )
 
-      process()
-    } catch (e: NoSuchElementException) {
+      processParsedCommand()
     }
 
-    nextState()
+    return when (errorOrResult) {
+      is Either.Left -> errorOrResult
+      else -> transitionToNextState()
+    }
   }
 
   fun run() {
@@ -163,7 +165,7 @@ private class SmtpClientHandler(client: Socket) : Closeable {
 
     stateMachine.transition(Event.OnConnect)
 
-    nextState()
+    transitionToNextState()
 
     logger.debug("Ran ${SmtpClientHandler::class.simpleName}")
   }

@@ -8,7 +8,7 @@ import kotlin.system.exitProcess
 
 private const val DefaultPort = 25
 
-fun main(args: Array<String>): Unit = runBlocking {
+fun main(args: Array<String>) {
   val argumentParser = ArgParser("KtSmtp")
 
   val port by argumentParser
@@ -22,7 +22,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
   argumentParser.parse(args)
 
-  SmtpServer(port).use {
+  SmtpServer(port).run().use {
     println("Press any key to quit.")
     readLine()
   }
