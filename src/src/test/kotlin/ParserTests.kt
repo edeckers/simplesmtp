@@ -51,7 +51,7 @@ class ParserTests {
 
     val domainName = ehloWithSingleParameter
       .flatMap { toEvent<Event.OnEhlo>(it) }
-      .map { e -> e.domain }
+      .map(Event.OnEhlo::domain)
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
@@ -65,7 +65,7 @@ class ParserTests {
 
     val domainName = ehloWithSingleParameter
       .flatMap { toEvent<Event.OnEhlo>(it) }
-      .map { e -> e.domain }
+      .map(Event.OnEhlo::domain)
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
@@ -86,7 +86,7 @@ class ParserTests {
 
     val maybeDomainName =
       errorOrEvent
-        .map { e -> e.domain }
+        .map(Event.OnEhlo::domain)
         .orNull()
 
     assertNotNull(maybeEvent, "Event should be OnEhlo")
@@ -114,7 +114,7 @@ class ParserTests {
 
     val domainName = heloWithSingleParameter
       .flatMap { toEvent<Event.OnHelo>(it) }
-      .map { e -> e.domain }
+      .map(Event.OnHelo::domain)
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
@@ -128,7 +128,7 @@ class ParserTests {
 
     val domainName = heloWithSingleParameter
       .flatMap { toEvent<Event.OnHelo>(it) }
-      .map { e -> e.domain }
+      .map(Event.OnHelo::domain)
       .orNull()
 
     assertNotNull(domainName, "No domainName was parsed")
@@ -149,7 +149,7 @@ class ParserTests {
 
     val maybeDomainName =
       errorOrEvent
-        .map { e -> e.domain }
+        .map(Event.OnHelo::domain)
         .orNull()
 
     assertNotNull(maybeEvent, "Event should be OnHelo")
@@ -181,7 +181,7 @@ class ParserTests {
     val maybeEmailAddress =
       mailFromWithSingleParameter
         .flatMap { toEvent<Event.OnMailFrom>(it) }
-        .map { e -> e.emailAddress }
+        .map(Event.OnMailFrom::emailAddress)
         .orNull()
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
@@ -194,7 +194,7 @@ class ParserTests {
 
     val maybeEmailAddress = mailFromWithSingleParameter
       .flatMap { toEvent<Event.OnMailFrom>(it) }
-      .map { it.emailAddress }
+      .map(Event.OnMailFrom::emailAddress)
       .orNull()
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
@@ -245,7 +245,7 @@ class ParserTests {
     val maybeEmailAddress =
       mailFromWithSingleParameter
         .flatMap { toEvent<Event.OnRcptTo>(it) }
-        .map { e -> e.emailAddress }
+        .map(Event.OnRcptTo::emailAddress)
         .orNull()
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
@@ -258,7 +258,7 @@ class ParserTests {
 
     val maybeEmailAddress = mailFromWithSingleParameter
       .flatMap { toEvent<Event.OnRcptTo>(it) }
-      .map { it.emailAddress }
+      .map(Event.OnRcptTo::emailAddress)
       .orNull()
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
