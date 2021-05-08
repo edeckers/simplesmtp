@@ -11,15 +11,18 @@ private const val CommandMailFrom = "MAIL FROM"
 private const val CommandRcptTo = "RCPT TO"
 private const val CommandQuit = "QUIT"
 
+private fun testCommand(actual: String, expected: String) = actual.toUpperCase() == expected
+private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
+
 private fun parseEhlo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
   val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
 
-  if (command.toUpperCase() != CommandEhlo) {
+  if (!testCommand(command, CommandEhlo)) {
     return Either.Left(Error("Expected line to start with $CommandEhlo got $command"))
   }
 
-  if (params.count() != 1) {
+  if (!testNumParams(params, 1)) {
     return Either.Left(Error("$CommandEhlo takes a single parameter (parameter=domain)"))
   }
 
@@ -30,11 +33,11 @@ private fun parseHelo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
   val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
 
-  if (command.toUpperCase() != CommandHelo) {
+  if (!testCommand(command, CommandHelo)) {
     return Either.Left(Error("Expected line to start with $CommandHelo got $command"))
   }
 
-  if (params.count() != 1) {
+  if (!testNumParams(params, 1)) {
     return Either.Left(Error("$CommandHelo takes a single parameter (parameter=domain)"))
   }
 
@@ -47,11 +50,11 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> {
 
   val params = if (rest.isNotEmpty()) rest[0].trim().split("\\s+".toRegex()) else emptyList()
 
-  if (command.toUpperCase() != CommandMailFrom) {
+  if (!testCommand(command, CommandMailFrom)) {
     return Either.Left(Error("Expected line to start with $CommandMailFrom got $command"))
   }
 
-  if (params.count() != 1) {
+  if (!testNumParams(params, 1)) {
     return Either.Left(Error("$CommandMailFrom takes a single parameter (parameter=e-mail address)"))
   }
 
@@ -62,11 +65,11 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
   val (command, params) = strippedLine.split(":").map { it.trim() }.destructure()
 
-  if (command.toUpperCase() != CommandRcptTo) {
+  if (!testCommand(command, CommandRcptTo)) {
     return Either.Left(Error("Expected line to start with $CommandRcptTo got $command"))
   }
 
-  if (params.count() != 1) {
+  if (!testNumParams(params, 1)) {
     return Either.Left(Error("$CommandRcptTo takes a single parameter (parameter=e-mail address)"))
   }
 
@@ -75,8 +78,14 @@ private fun parseRcptTo(line: String): Either<Throwable, Event> {
 
 private fun parseData(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
-  if (strippedLine.toUpperCase() != CommandData) {
-    return Either.Left(Error("Expected line to start with $CommandData got $strippedLine"))
+  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+
+  if (!testCommand(command, CommandData)) {
+    return Either.Left(Error("Expected line to start with $CommandData got $command"))
+  }
+
+  if (!testNumParams(params, 0)) {
+    return Either.Left(Error("$CommandData takes zero parameters"))
   }
 
   return Either.Right(Event.OnData)
@@ -84,8 +93,14 @@ private fun parseData(line: String): Either<Throwable, Event> {
 
 private fun parseQuit(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
-  if (strippedLine.toUpperCase() != CommandQuit) {
+  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
+
+  if (command.toUpperCase() != CommandQuit) {
     return Either.Left(Error("Expected line to start with $CommandQuit got $strippedLine"))
+  }
+
+  if (!testNumParams(params, 0)) {
+    return Either.Left(Error("$CommandData takes zero parameters"))
   }
 
   return Either.Right(Event.OnQuit)
