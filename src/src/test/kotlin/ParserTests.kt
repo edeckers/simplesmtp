@@ -24,7 +24,7 @@ class ParserTests {
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
     assertEquals("mailbox", maybeEmailAddress.mailbox, "Unexpected mailbox")
-    assertEquals("domain.com", maybeEmailAddress.hostname, "Unexpected hostname")
+    assertEquals("domain.com", maybeEmailAddress.domainName, "Unexpected hostname")
     assert_email_address_matches_rules(maybeEmailAddress.address)
   }
   // endregion
@@ -50,8 +50,8 @@ class ParserTests {
       .map { e -> e.domain }
       .orNull()
 
-    assertNotNull(domainName, "No domain name was parsed")
-    assert_domain_name_matches_rules(domainName)
+    assertNotNull(domainName, "No domainName was parsed")
+    assert_domainName_matches_rules(domainName.name)
   }
 
   @Test
@@ -63,9 +63,9 @@ class ParserTests {
       .map { e -> e.domain }
       .orNull()
 
-    assertNotNull(domainName, "No domain name was parsed")
-    assert_domain_name_matches_rules(domainName)
-    assertEquals("in-fi.nl", domainName)
+    assertNotNull(domainName, "No domainName was parsed")
+    assert_domainName_matches_rules(domainName.name)
+    assertEquals("in-fi.nl", domainName.name)
   }
 
   @Test
@@ -84,7 +84,7 @@ class ParserTests {
         .orNull()
 
     assertNotNull(maybeEvent, "Event should be OnEhlo")
-    assertEquals("infi.nl", maybeDomainName)
+    assertEquals("infi.nl", maybeDomainName?.name)
   }
 // endregion
 
@@ -109,8 +109,8 @@ class ParserTests {
       .map { e -> e.domain }
       .orNull()
 
-    assertNotNull(domainName, "No domain name was parsed")
-    assert_domain_name_matches_rules(domainName)
+    assertNotNull(domainName, "No domainName was parsed")
+    assert_domainName_matches_rules(domainName.name)
   }
 
   @Test
@@ -122,9 +122,9 @@ class ParserTests {
       .map { e -> e.domain }
       .orNull()
 
-    assertNotNull(domainName, "No domain name was parsed")
-    assert_domain_name_matches_rules(domainName)
-    assertEquals("in-fi.nl", domainName)
+    assertNotNull(domainName, "No domainName was parsed")
+    assert_domainName_matches_rules(domainName.name)
+    assertEquals("in-fi.nl", domainName.name)
   }
 
   @Test
@@ -143,7 +143,7 @@ class ParserTests {
         .orNull()
 
     assertNotNull(maybeEvent, "Event should be OnHelo")
-    assertEquals("infi.nl", maybeDomainName)
+    assertEquals("infi.nl", maybeDomainName?.name)
   }
   // endregion
 
@@ -186,7 +186,7 @@ class ParserTests {
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
     assertEquals("mailbox", maybeEmailAddress.mailbox, "Unexpected mailbox")
-    assertEquals("domain.com", maybeEmailAddress.hostname, "Unexpected hostname")
+    assertEquals("domain.com", maybeEmailAddress.domainName, "Unexpected hostname")
   }
 
   @Test
@@ -242,7 +242,7 @@ class ParserTests {
 
     assertNotNull(maybeEmailAddress, "No email address was parsed")
     assertEquals("mailbox", maybeEmailAddress.mailbox, "Unexpected mailbox")
-    assertEquals("domain.com", maybeEmailAddress.hostname, "Unexpected hostname")
+    assertEquals("domain.com", maybeEmailAddress.domainName, "Unexpected hostname")
   }
 
   @Test
@@ -331,7 +331,7 @@ class ParserTests {
   }
   // endregion
 
-  private fun assert_domain_name_matches_rules(domainName: String) {
+  private fun assert_domainName_matches_rules(domainName: String) {
     assertTrue(domainName.isNotEmpty(), "Domain name length should be at least one character long")
     assertTrue(domainName.matches("[a-zA-Z0-9.-]*".toRegex()), "Domain name contains unexpected characters")
     assertNotSame('-', domainName[0], "Domain cannot start with hyphen")

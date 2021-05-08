@@ -13,64 +13,64 @@ private const val CommandQuit = "QUIT"
 
 private fun parseEhlo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
-  val (command, parts) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != CommandEhlo) {
     return Either.Left(Error("Expected line to start with $CommandEhlo got $command"))
   }
 
-  if (parts.count() != 1) {
+  if (params.count() != 1) {
     return Either.Left(Error("$CommandEhlo takes a single parameter (parameter=domain)"))
   }
 
-  return Either.Right(Event.OnEhlo(parts[0]))
+  return DomainName.parse(params[0]).map(Event::OnEhlo)
 }
 
 private fun parseHelo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
-  val (command, parts) = strippedLine.split("\\s+".toRegex()).destructure()
+  val (command, params) = strippedLine.split("\\s+".toRegex()).destructure()
 
   if (command.toUpperCase() != CommandHelo) {
     return Either.Left(Error("Expected line to start with $CommandHelo got $command"))
   }
 
-  if (parts.count() != 1) {
+  if (params.count() != 1) {
     return Either.Left(Error("$CommandHelo takes a single parameter (parameter=domain)"))
   }
 
-  return Either.Right(Event.OnHelo(parts[0]))
+  return DomainName.parse(params[0]).map(Event::OnHelo)
 }
 
 private fun parseMailFrom(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
   val (command, rest) = strippedLine.split(":").map { it.trim() }.destructure()
 
-  val parts = if (rest.isNotEmpty()) rest[0].trim().split("\\s+".toRegex()) else emptyList()
+  val params = if (rest.isNotEmpty()) rest[0].trim().split("\\s+".toRegex()) else emptyList()
 
   if (command.toUpperCase() != CommandMailFrom) {
     return Either.Left(Error("Expected line to start with $CommandMailFrom got $command"))
   }
 
-  if (parts.count() != 1) {
+  if (params.count() != 1) {
     return Either.Left(Error("$CommandMailFrom takes a single parameter (parameter=e-mail address)"))
   }
 
-  return EmailAddress.parse(parts[0]).map(Event::OnMailFrom)
+  return EmailAddress.parse(params[0]).map(Event::OnMailFrom)
 }
 
 private fun parseRcptTo(line: String): Either<Throwable, Event> {
   val strippedLine = stripCommand(line)
-  val (command, parts) = strippedLine.split(":").map { it.trim() }.destructure()
+  val (command, params) = strippedLine.split(":").map { it.trim() }.destructure()
 
   if (command.toUpperCase() != CommandRcptTo) {
     return Either.Left(Error("Expected line to start with $CommandRcptTo got $command"))
   }
 
-  if (parts.count() != 1) {
+  if (params.count() != 1) {
     return Either.Left(Error("$CommandRcptTo takes a single parameter (parameter=e-mail address)"))
   }
 
-  return EmailAddress.parse(parts[0]).map(Event::OnRcptTo)
+  return EmailAddress.parse(params[0]).map(Event::OnRcptTo)
 }
 
 private fun parseData(line: String): Either<Throwable, Event> {

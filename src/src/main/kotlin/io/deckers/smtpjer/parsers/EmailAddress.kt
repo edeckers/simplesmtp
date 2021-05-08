@@ -1,10 +1,11 @@
 package io.deckers.smtpjer.parsers
 
 import arrow.core.Either
+import arrow.core.flatMap
 
-class EmailAddress(val address: String) {
-  val hostname = address.split("@").last()
-  val mailbox = address.substring(0, address.indexOf("@"))
+class EmailAddress(val mailbox: String, domain: DomainName) {
+  val domainName = domain.name
+  val address = "${mailbox}@${domainName}"
 
   companion object {
     fun parse(address: String): Either<Throwable, EmailAddress> {
@@ -20,7 +21,13 @@ class EmailAddress(val address: String) {
         return Either.Left(Error("E-mail address must contain @"))
       }
 
-      return Either.Right(EmailAddress(address))
+      val errorOrDomainName = DomainName.parse(address.split("@").last())
+
+      return errorOrDomainName.flatMap { domainName ->
+        val mailbox = address.substring(0, address.indexOf("@"))
+
+        Either.Right(EmailAddress(mailbox, domainName))
+      }
     }
   }
 
