@@ -41,6 +41,9 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       on<Event.OnConnect> {
         transitionTo(State.Helo, status(220, "${InetAddress.getLocalHost()} Service ready"))
       }
+      on<Event.OnQuit> {
+        dontTransition(Command.Quit)
+      }
     }
 
     state<State.Helo> {
@@ -50,11 +53,17 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       on<Event.OnHelo> {
         transitionTo(State.MailFrom(it.domain), status(250, "Ok"))
       }
+      on<Event.OnQuit> {
+        dontTransition(Command.Quit)
+      }
     }
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
         transitionTo(State.RcptTo(domain, it.emailAddress), status(250, "Ok", "2.1.0"))
+      }
+      on<Event.OnQuit> {
+        dontTransition(Command.Quit)
       }
     }
 
@@ -64,23 +73,20 @@ private class SmtpClientHandler(client: Socket) : Closeable {
           State.Data(domain, mailFrom, it.emailAddress), status(250, "Ok", "2.1.5"),
         )
       }
+      on<Event.OnQuit> {
+        dontTransition(Command.Quit)
+      }
     }
 
     state<State.Data> {
       on<Event.OnData> {
-        transitionTo(State.Finish, Command.ReceiveData)
+        transitionTo(State.Helo, Command.ReceiveData)
       }
       on<Event.OnParseError> {
         dontTransition(status(500, "Syntax error, command unrecognized"))
       }
-    }
-
-    state<State.Finish> {
       on<Event.OnQuit> {
-        transitionTo(State.Helo)
-      }
-      on<Event.OnParseError> {
-        dontTransition(status(500, "Syntax error, command unrecognized"))
+        dontTransition(Command.Quit)
       }
     }
 
@@ -101,6 +107,10 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       }
 
       when (val cmd = validTransition.sideEffect) {
+        is Command.Quit -> {
+          writer.write("221 2.0.0 Bye\n".toByteArray())
+          client.close()
+        }
         is Command.ReceiveData -> {
           writer.write("354 Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
 
