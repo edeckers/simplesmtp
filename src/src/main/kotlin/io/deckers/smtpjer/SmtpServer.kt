@@ -23,14 +23,18 @@ private val EndOfDataStreamPattern = arrayOf("", ".", "")
 
 private fun logEvent(event: Event) =
   when (event) {
-    is Event.OnData -> logger.debug("DATA")
-    is Event.OnEhlo -> logger.debug("EHLO {}", event.domain)
-    is Event.OnHelo -> logger.debug("HELO {}", event.domain)
-    is Event.OnMailFrom -> logger.debug("MAIL FROM {}", event.emailAddress)
-    is Event.OnRcptTo -> logger.debug("RCPT TO {}", event.emailAddress)
-    is Event.OnQuit -> logger.debug("QUIT")
-    else -> logger.error("Unknown event ${event::class.simpleName}")
+    is Event.OnConnect -> logger.error("Established connection")
+    is Event.OnData -> logger.debug("Received DATA")
+    is Event.OnEhlo -> logger.debug("Received EHLO {}", event.domain)
+    is Event.OnHelo -> logger.debug("Received HELO {}", event.domain)
+    is Event.OnMailFrom -> logger.debug("Received MAIL FROM {}", event.emailAddress)
+    is Event.OnRcptTo -> logger.debug("Received RCPT TO {}", event.emailAddress)
+    is Event.OnQuit -> logger.debug("Received QUIT")
+    else -> logger.error("Received unknown event ${event::class.simpleName}")
   }
+
+private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
+  { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
 
 private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
   Command.WriteStatus(
@@ -102,26 +106,25 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
     }
 
     onTransition { t ->
-      logEvent(t.event);
+      logEvent(t.event)
 
-      val handleTransition =
+      val handleSideEffects =
         Option.fromNullable(t as? StateMachine.Transition.Valid)
-          .map(::transition)
+          .map(::processSideEffects)
           .getOrElse { logInvalidTransition(t) }
 
-      handleTransition()
+      handleSideEffects()
     }
   }
 
-  private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
-    { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
-
-  private fun transition(t: StateMachine.Transition.Valid<State, Event, Command>): () -> Unit =
-    { processCommand(t)  }
+  private fun processSideEffects(t: StateMachine.Transition.Valid<State, Event, Command>): () -> Unit =
+    { processCommand(t) }
 
   private fun closeConnection() {
+    logger.debug("Closing connection to {}:{}", client.inetAddress, client.port)
     writer.write("221 2.0.0 Bye\n".toByteArray())
     client.close()
+    logger.debug("Closed connection to {}:{}", client.inetAddress, client.port)
   }
 
   private fun writeStatus(code: Int, message: String) =
@@ -132,7 +135,7 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
 
     val processor = processorFactory.create(dataState.domain, dataState.mailFrom, dataState.rcptTo)
 
-    logger.debug("Started data retrieval")
+    logger.debug("Starting data retrieval")
 
     val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
     while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
@@ -201,9 +204,7 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
 private fun runSmtpClientHandler(socket: Socket) = thread {
   logger.info("Client connected (host={})", socket.inetAddress.hostAddress)
 
-  SmtpClientHandler(socket).use { handler ->
-    handler.run()
-  }
+  SmtpClientHandler(socket).use(SmtpClientHandler::run)
 
   logger.info("Client disconnected (host={})", socket.inetAddress.hostAddress)
 }
@@ -212,11 +213,16 @@ class SmtpServer constructor(port: Int) : Closeable {
   private val socket = ServerSocket(port)
 
   override fun close() {
+    logger.debug("Closing ${SmtpServer::class.simpleName}")
+
+    val message = "Closed ${SmtpServer::class.simpleName}"
     if (socket.isClosed) {
+      logger.debug(message)
       return
     }
 
     socket.close()
+    logger.debug(message)
   }
 
   private tailrec fun waitForConnections() {
