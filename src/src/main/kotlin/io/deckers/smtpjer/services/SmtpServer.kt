@@ -4,13 +4,13 @@ import arrow.core.Either
 import arrow.core.Option
 import arrow.core.getOrElse
 import com.tinder.StateMachine
-import io.deckers.smtpjer.CircularQueue
 import io.deckers.smtpjer.backends.DataProcessorFactory
 import io.deckers.smtpjer.parsers.parseCommand
 import io.deckers.smtpjer.state_machines.Command
 import io.deckers.smtpjer.state_machines.Event
 import io.deckers.smtpjer.state_machines.SmtpStateMachine
 import io.deckers.smtpjer.state_machines.State
+import io.deckers.smtpjer.utils.CircularQueue
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.ServerSocket

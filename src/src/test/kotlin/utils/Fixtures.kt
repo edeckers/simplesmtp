@@ -1,4 +1,6 @@
+import arrow.core.Either
 import io.deckers.smtpjer.services.SmtpServer
+import io.deckers.smtpjer.state_machines.Event
 import java.io.Closeable
 import java.net.Socket
 import java.util.*
@@ -6,8 +8,20 @@ import kotlin.test.assertEquals
 
 private const val ServerPort = 9999
 
-fun server() = SmtpServer(ServerPort, dataProcessorFactory).run()
+const val ValidEhloCommand = "EHLO infi.nl"
+const val ValidHeloCommand = "HELO infi.nl"
+const val ValidMailFromCommand = "MAIL FROM: mailbox@domain.com"
+const val ValidRcptToCommand = "RCPT TO: mailbox@domain.com"
+const val ValidDataCommand = "DATA"
+const val ValidQuitCommand = "QUIT"  // region E-mail address
+
+fun dataProcessorFactory() = DummyProcessorFactory()
+
+fun server() = SmtpServer(ServerPort, dataProcessorFactory()).run()
 fun client() = Socket("127.0.0.1", ServerPort)
+
+inline fun <reified T> toEvent(e: Event): Either<Throwable, T> =
+  if (e is T) Either.Right(e) else Either.Left(Error(""))
 
 open class ClientDSL(private val server: SmtpServer, private val client: Socket) : Closeable {
   private val reader = Scanner(client.getInputStream())
