@@ -6,12 +6,12 @@ import arrow.core.getOrElse
 import com.tinder.StateMachine
 import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
 import io.deckers.smtpjer.parsers.parseCommand
-import io.deckers.smtpjer.state_machine.Command
-import io.deckers.smtpjer.state_machine.Event
-import io.deckers.smtpjer.state_machine.State
+import io.deckers.smtpjer.state_machines.Command
+import io.deckers.smtpjer.state_machines.Event
+import io.deckers.smtpjer.state_machines.SmtpStateMachine
+import io.deckers.smtpjer.state_machines.State
 import mu.KotlinLogging
 import java.io.Closeable
-import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.*
@@ -36,82 +36,18 @@ private fun logEvent(event: Event) =
 private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
   { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
 
-private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
-  Command.WriteStatus(
-    code,
-    Option.fromNullable(extendedCode)
-      .map { "$it $message" }
-      .getOrElse { message })
-
-private fun <S : State> StateMachine.GraphBuilder<State, Event, Command>.StateDefinitionBuilder<S>.onEscalation() {
-  on<Event.OnParseError> {
-    dontTransition(status(500, "Syntax error, command unrecognized"))
-  }
-  on<Event.OnQuit> {
-    dontTransition(Command.Quit)
-  }
-}
-
 private class SmtpClientHandler(private val client: Socket) : Closeable {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
   private val processorFactory = FileDataProcessorFactory()
-
-  private val stateMachine = StateMachine.create<State, Event, Command> {
-    initialState(State.Start)
-
-    state<State.Start> {
-      on<Event.OnConnect> {
-        transitionTo(State.Helo, status(220, "${InetAddress.getLocalHost()} Service ready"))
-      }
-
-      onEscalation()
-    }
-
-    state<State.Helo> {
-      on<Event.OnEhlo> {
-        transitionTo(State.Helo, status(500, "Syntax error, command unrecognized", "5.5.1"))
-      }
-      on<Event.OnHelo> {
-        transitionTo(State.MailFrom(it.domain), status(250, "Ok"))
-      }
-
-      onEscalation()
-    }
-
-    state<State.MailFrom> {
-      on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(domain, it.emailAddress), status(250, "Ok", "2.1.0"))
-      }
-
-      onEscalation()
-    }
-
-    state<State.RcptTo> {
-      on<Event.OnRcptTo> {
-        transitionTo(
-          State.Data(domain, mailFrom, it.emailAddress), status(250, "Ok", "2.1.5"),
-        )
-      }
-
-      onEscalation()
-    }
-
-    state<State.Data> {
-      on<Event.OnData> {
-        transitionTo(State.Helo, Command.ReceiveData)
-      }
-
-      onEscalation()
-    }
-
-    onTransition { t ->
-      logEvent(t.event)
+  private val stateMachine = SmtpStateMachine.create {
+    onTransition {
+      logEvent(it.event)
 
       val handleSideEffects =
-        Option.fromNullable(t as? StateMachine.Transition.Valid)
+        Option.fromNullable(it as? StateMachine.Transition.Valid)
           .map(::processSideEffects)
-          .getOrElse { logInvalidTransition(t) }
+          .getOrElse { logInvalidTransition(it) }
 
       handleSideEffects()
     }
@@ -201,14 +137,6 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
   }
 }
 
-private fun runSmtpClientHandler(socket: Socket) = thread {
-  logger.info("Client connected (host={})", socket.inetAddress.hostAddress)
-
-  SmtpClientHandler(socket).use(SmtpClientHandler::run)
-
-  logger.info("Client disconnected (host={})", socket.inetAddress.hostAddress)
-}
-
 class SmtpServer constructor(port: Int) : Closeable {
   private val socket = ServerSocket(port)
 
@@ -231,7 +159,7 @@ class SmtpServer constructor(port: Int) : Closeable {
       val client = socket.accept()
       logger.info("Received connection on port (port={})", socket.localPort)
 
-      runSmtpClientHandler(client)
+      SmtpClientHandler(client).use(SmtpClientHandler::run)
     }
 
     when (errorOrResult) {

@@ -3,7 +3,7 @@ package io.deckers.smtpjer.parsers
 import arrow.core.Either
 import arrow.core.Option
 import arrow.core.getOrElse
-import io.deckers.smtpjer.state_machine.*
+import io.deckers.smtpjer.state_machines.*
 
 private const val CommandData = "DATA"
 private const val CommandEhlo = "EHLO"

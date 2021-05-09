@@ -1,4 +1,4 @@
-package io.deckers.smtpjer.state_machine
+package io.deckers.smtpjer.state_machines
 
 import io.deckers.smtpjer.parsers.DomainName
 import io.deckers.smtpjer.parsers.EmailAddress

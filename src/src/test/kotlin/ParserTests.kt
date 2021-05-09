@@ -2,7 +2,7 @@ import arrow.core.Either
 import arrow.core.flatMap
 import arrow.core.getOrElse
 import io.deckers.smtpjer.parsers.EmailAddress
-import io.deckers.smtpjer.state_machine.Event
+import io.deckers.smtpjer.state_machines.Event
 import io.deckers.smtpjer.parsers.parseCommand
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

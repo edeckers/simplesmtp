@@ -1,4 +1,4 @@
-package io.deckers.smtpjer.state_machine
+package io.deckers.smtpjer.state_machines
 
 sealed class Command {
   object ReceiveData : Command()
