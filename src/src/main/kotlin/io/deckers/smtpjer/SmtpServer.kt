@@ -14,7 +14,6 @@ import java.io.Closeable
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketException
 import java.util.*
 import kotlin.concurrent.thread
 
@@ -22,26 +21,37 @@ private val logger = KotlinLogging.logger {}
 
 private val EndOfDataStreamPattern = arrayOf("", ".", "")
 
-private class SmtpClientHandler(client: Socket) : Closeable {
+private fun logEvent(event: Event) =
+  when (event) {
+    is Event.OnData -> logger.debug("DATA")
+    is Event.OnEhlo -> logger.debug("EHLO {}", event.domain)
+    is Event.OnHelo -> logger.debug("HELO {}", event.domain)
+    is Event.OnMailFrom -> logger.debug("MAIL FROM {}", event.emailAddress)
+    is Event.OnRcptTo -> logger.debug("RCPT TO {}", event.emailAddress)
+    is Event.OnQuit -> logger.debug("QUIT")
+    else -> logger.error("Unknown event ${event::class.simpleName}")
+  }
+
+private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
+  Command.WriteStatus(
+    code,
+    Option.fromNullable(extendedCode)
+      .map { "$it $message" }
+      .getOrElse { message })
+
+private fun <S : State> StateMachine.GraphBuilder<State, Event, Command>.StateDefinitionBuilder<S>.onEscalation() {
+  on<Event.OnParseError> {
+    dontTransition(status(500, "Syntax error, command unrecognized"))
+  }
+  on<Event.OnQuit> {
+    dontTransition(Command.Quit)
+  }
+}
+
+private class SmtpClientHandler(private val client: Socket) : Closeable {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
   private val processorFactory = FileDataProcessorFactory()
-
-  private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
-    Command.WriteStatus(
-      code,
-      Option.fromNullable(extendedCode)
-        .map { "$it $message" }
-        .getOrElse { message })
-
-  private fun <S : State> StateMachine.GraphBuilder<State, Event, Command>.StateDefinitionBuilder<S>.onEscalation() {
-    on<Event.OnParseError> {
-      dontTransition(status(500, "Syntax error, command unrecognized"))
-    }
-    on<Event.OnQuit> {
-      dontTransition(Command.Quit)
-    }
-  }
 
   private val stateMachine = StateMachine.create<State, Event, Command> {
     initialState(State.Start)
@@ -91,52 +101,62 @@ private class SmtpClientHandler(client: Socket) : Closeable {
       onEscalation()
     }
 
-    onTransition {
-      val validTransition = it as? StateMachine.Transition.Valid
-      if (validTransition == null) {
-        logger.error("Failed to change state {} using command {}", it.fromState, it.event)
-        return@onTransition
-      }
+    onTransition { t ->
+      logEvent(t.event);
 
-      when (val evt = validTransition.event) {
-        is Event.OnData -> logger.debug("DATA")
-        is Event.OnEhlo -> logger.debug("EHLO {}", evt.domain)
-        is Event.OnHelo -> logger.debug("HELO {}", evt.domain)
-        is Event.OnMailFrom -> logger.debug("MAIL FROM {}", evt.emailAddress)
-        is Event.OnRcptTo -> logger.debug("RCPT TO {}", evt.emailAddress)
-        is Event.OnQuit -> logger.debug("QUIT")
-      }
+      val handleTransition =
+        Option.fromNullable(t as? StateMachine.Transition.Valid)
+          .map(::transition)
+          .getOrElse { logInvalidTransition(t) }
 
-      when (val cmd = validTransition.sideEffect) {
-        is Command.Quit -> {
-          writer.write("221 2.0.0 Bye\n".toByteArray())
-          client.close()
-        }
-        is Command.ReceiveData -> {
-          writer.write("354 Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
+      handleTransition()
+    }
+  }
 
-          val st = validTransition.fromState as State.Data
-          val processor = processorFactory.create(st.domain, st.mailFrom, st.rcptTo)
+  private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
+    { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
 
-          logger.debug("Started data retrieval")
+  private fun transition(t: StateMachine.Transition.Valid<State, Event, Command>): () -> Unit =
+    { processCommand(t)  }
 
-          val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
-          while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
-            val line = reader.nextLine()
-            lastThreeLines.push(line)
+  private fun closeConnection() {
+    writer.write("221 2.0.0 Bye\n".toByteArray())
+    client.close()
+  }
 
-            processor.write(line)
-            logger.debug("Line: $line")
-          }
+  private fun writeStatus(code: Int, message: String) =
+    writer.write("$code ${message}\n".toByteArray())
 
-          logger.debug("Finished data retrieval")
+  private fun processDataStream(dataState: State.Data) {
+    writer.write("354 Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
 
-          writer.write("250 2.6.0 Message Accepted\n".toByteArray())
-        }
-        is Command.WriteStatus -> {
-          writer.write("${cmd.code} ${cmd.message}\n".toByteArray())
-        }
-      }
+    val processor = processorFactory.create(dataState.domain, dataState.mailFrom, dataState.rcptTo)
+
+    logger.debug("Started data retrieval")
+
+    val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
+    while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
+      val line = reader.nextLine()
+      lastThreeLines.push(line)
+
+      processor.write(line)
+      logger.debug("Line: $line")
+    }
+
+    logger.debug("Finished data retrieval")
+
+    writer.write("250 2.6.0 Message Accepted\n".toByteArray())
+  }
+
+  private fun processCommand(
+    validTransition: StateMachine.Transition.Valid<State, Event, Command>,
+  ) {
+    val (command, fromState) = Pair(validTransition.sideEffect, validTransition.fromState)
+
+    when (command) {
+      is Command.Quit -> closeConnection()
+      is Command.ReceiveData -> processDataStream(fromState as State.Data)
+      is Command.WriteStatus -> writeStatus(command.code, command.message)
     }
   }
 

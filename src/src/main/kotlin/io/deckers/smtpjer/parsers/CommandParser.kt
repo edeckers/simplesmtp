@@ -19,12 +19,12 @@ private fun testNumParams(actual: List<String>, expected: Int) = actual.size == 
 private fun unexpectedCommand(actual: String, expected: String) =
   Either.Left(Error("Expected line to start with $expected got $actual"))
 
-private fun unexpectedNumParams(command: String, number: Int, expected: List<String>): Either.Left<Error> {
+private fun unexpectedNumParams(command: String, actualCount: Int, expected: List<String>): Either.Left<Error> {
   val message =
     if (expected.size == 1)
-      "$command takes a single parameter (parameter=${expected.first()}})"
+      "$command takes a single parameter (parameter=${expected.first()}}), received $actualCount"
     else
-      "$command takes ${expected.size} parameters (parameters=${expected.joinToString(", ")})"
+      "$command takes ${expected.size} parameters (parameters=${expected.joinToString(", ")}), received $actualCount"
 
   return Either.Left(Error(message))
 }
@@ -42,7 +42,7 @@ private fun readCommand(line: String, separator: Char) =
       Option(substring(kotlin.math.min(index + 1, length)))
         .filter(String::isNotEmpty)
         .map { it.trim().split("\\s+".toRegex()) }
-        .getOrElse { emptyList() }
+        .getOrElse(::emptyList)
 
     Pair(command, params)
   }
