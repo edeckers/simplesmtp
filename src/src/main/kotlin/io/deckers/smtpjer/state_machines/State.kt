@@ -8,5 +8,5 @@ sealed class State {
   object Helo : State()
   data class MailFrom(val domain: DomainName) : State()
   data class RcptTo(val domain: DomainName, val mailFrom: EmailAddress) : State()
-  data class Data(val domain: DomainName, val rcptTo: EmailAddress, val mailFrom: EmailAddress) : State()
+  data class Data(val domain: DomainName, val mailFrom: EmailAddress, val rcptTo: EmailAddress) : State()
 }

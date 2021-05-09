@@ -1,10 +1,11 @@
-package io.deckers.smtpjer
+package io.deckers.smtpjer.services
 
 import arrow.core.Either
 import arrow.core.Option
 import arrow.core.getOrElse
 import com.tinder.StateMachine
-import io.deckers.smtpjer.backends.file.FileDataProcessorFactory
+import io.deckers.smtpjer.CircularQueue
+import io.deckers.smtpjer.backends.DataProcessorFactory
 import io.deckers.smtpjer.parsers.parseCommand
 import io.deckers.smtpjer.state_machines.Command
 import io.deckers.smtpjer.state_machines.Event
@@ -19,7 +20,7 @@ import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
 
-private val EndOfDataStreamPattern = arrayOf("", ".", "")
+private val EndOfDataStreamPattern = arrayOf("", ".").reversedArray()
 
 private fun logEvent(event: Event) =
   when (event) {
@@ -36,10 +37,12 @@ private fun logEvent(event: Event) =
 private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
   { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
 
-private class SmtpClientHandler(private val client: Socket) : Closeable {
+private class SmtpClientHandler(
+  private val client: Socket,
+  private val processorFactory: DataProcessorFactory
+) : Closeable {
   private val reader: Scanner = Scanner(client.getInputStream())
   private val writer = client.getOutputStream()
-  private val processorFactory = FileDataProcessorFactory()
   private val stateMachine = SmtpStateMachine.create {
     onTransition {
       logEvent(it.event)
@@ -71,15 +74,17 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
 
     val processor = processorFactory.create(dataState.domain, dataState.mailFrom, dataState.rcptTo)
 
-    logger.debug("Starting data retrieval")
+    processor.use {
+      logger.debug("Starting data retrieval")
 
-    val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
-    while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
-      val line = reader.nextLine()
-      lastThreeLines.push(line)
+      val lastThreeLines = CircularQueue(EndOfDataStreamPattern.size)
+      while (!lastThreeLines.toArray().contentEquals(EndOfDataStreamPattern)) {
+        val line = reader.nextLine()
+        lastThreeLines.push(line)
 
-      processor.write(line)
-      logger.debug("Line: $line")
+        processor.write(line)
+        logger.debug("Line: $line")
+      }
     }
 
     logger.debug("Finished data retrieval")
@@ -137,7 +142,7 @@ private class SmtpClientHandler(private val client: Socket) : Closeable {
   }
 }
 
-class SmtpServer constructor(port: Int) : Closeable {
+class SmtpServer(port: Int, private val dataProcessorFactory: DataProcessorFactory) : Closeable {
   private val socket = ServerSocket(port)
 
   override fun close() {
@@ -159,7 +164,7 @@ class SmtpServer constructor(port: Int) : Closeable {
       val client = socket.accept()
       logger.info("Received connection on port (port={})", socket.localPort)
 
-      SmtpClientHandler(client).use(SmtpClientHandler::run)
+      SmtpClientHandler(client, dataProcessorFactory).use(SmtpClientHandler::run)
     }
 
     when (errorOrResult) {
