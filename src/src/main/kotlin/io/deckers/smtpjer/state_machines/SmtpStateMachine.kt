@@ -1,20 +1,14 @@
 package io.deckers.smtpjer.state_machines
 
-import arrow.core.Option
-import arrow.core.getOrElse
 import com.tinder.StateMachine
 import java.net.InetAddress
 
-private fun status(code: Int, message: String, extendedCode: String? = null): Command.WriteStatus =
-  Command.WriteStatus(
-    code,
-    Option.fromNullable(extendedCode)
-      .map { "$it $message" }
-      .getOrElse { message })
+private fun sendStatus(code: Int, message: String, extendedCode: String? = null) =
+  Command.WriteStatus(code, message, extendedCode)
 
 private fun <S : State> StateMachine.GraphBuilder<State, Event, Command>.StateDefinitionBuilder<S>.onEscalation() {
   on<Event.OnParseError> {
-    dontTransition(status(500, "Syntax error, command unrecognized"))
+    dontTransition(sendStatus(500, "Syntax error, command unrecognized"))
   }
   on<Event.OnQuit> {
     dontTransition(Command.Quit)
@@ -35,7 +29,7 @@ class SmtpStateMachine(params: SmtpStateMachineParams) {
 
     state<State.Start> {
       on<Event.OnConnect> {
-        transitionTo(State.Helo, status(220, "${InetAddress.getLocalHost()} Service ready"))
+        transitionTo(State.Helo, sendStatus(220, "${InetAddress.getLocalHost()} Service ready"))
       }
 
       onEscalation()
@@ -43,10 +37,10 @@ class SmtpStateMachine(params: SmtpStateMachineParams) {
 
     state<State.Helo> {
       on<Event.OnEhlo> {
-        transitionTo(State.Helo, status(500, "Syntax error, command unrecognized", "5.5.1"))
+        transitionTo(State.Helo, sendStatus(500, "Syntax error, command unrecognized", "5.5.1"))
       }
       on<Event.OnHelo> {
-        transitionTo(State.MailFrom(it.domain), status(250, "Ok"))
+        transitionTo(State.MailFrom(it.domain), sendStatus(250, "Ok"))
       }
 
       onEscalation()
@@ -54,7 +48,7 @@ class SmtpStateMachine(params: SmtpStateMachineParams) {
 
     state<State.MailFrom> {
       on<Event.OnMailFrom> {
-        transitionTo(State.RcptTo(domain, it.emailAddress), status(250, "Ok", "2.1.0"))
+        transitionTo(State.RcptTo(domain, it.emailAddress), sendStatus(250, "Ok", "2.1.0"))
       }
 
       onEscalation()
@@ -63,7 +57,7 @@ class SmtpStateMachine(params: SmtpStateMachineParams) {
     state<State.RcptTo> {
       on<Event.OnRcptTo> {
         transitionTo(
-          State.Data(domain, mailFrom, it.emailAddress), status(250, "Ok", "2.1.5"),
+          State.Data(domain, mailFrom, it.emailAddress), sendStatus(250, "Ok", "2.1.5"),
         )
       }
 

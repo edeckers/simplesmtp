@@ -61,16 +61,20 @@ private class SmtpClientHandler(
 
   private fun closeConnection() {
     logger.debug("Closing connection to {}:{}", client.inetAddress, client.port)
-    writer.write("221 2.0.0 Bye\n".toByteArray())
+    writeStatus(221,  "Bye", "2.0.0")
     client.close()
     logger.debug("Closed connection to {}:{}", client.inetAddress, client.port)
   }
 
-  private fun writeStatus(code: Int, message: String) =
-    writer.write("$code ${message}\n".toByteArray())
+  private fun writeStatus(code: Int, message: String, extendedCode: String? = null) =
+    writer.write(
+      Option.fromNullable(extendedCode)
+        .map { "$code $extendedCode $message\n" }
+        .getOrElse { "$code $message\n" }
+        .toByteArray())
 
   private fun processDataStream(dataState: State.Data) {
-    writer.write("354 Start mail input; end with <CRLF>.<CRLF>\n".toByteArray())
+    writeStatus(354, "Start mail input; end with <CRLF>.<CRLF>")
 
     val processor = processorFactory.create(dataState.domain, dataState.mailFrom, dataState.rcptTo)
 
@@ -89,7 +93,7 @@ private class SmtpClientHandler(
 
     logger.debug("Finished data retrieval")
 
-    writer.write("250 2.6.0 Message Accepted\n".toByteArray())
+    writeStatus(250, "Message Accepted", "2.6.0")
   }
 
   private fun processCommand(
@@ -100,7 +104,7 @@ private class SmtpClientHandler(
     when (command) {
       is Command.Quit -> closeConnection()
       is Command.ReceiveData -> processDataStream(fromState as State.Data)
-      is Command.WriteStatus -> writeStatus(command.code, command.message)
+      is Command.WriteStatus -> writeStatus(command.code, command.message, command.extendedCode)
     }
   }
 
