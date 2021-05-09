@@ -18,6 +18,5 @@ Date: 2021-05-9
 hello world
 
 .
-quit
-" | slowcat  | nc ${HOST} ${PORT}
+quit" | slowcat  | nc ${HOST} ${PORT}
 
