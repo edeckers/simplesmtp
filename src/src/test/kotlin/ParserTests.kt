@@ -8,10 +8,22 @@ import org.junit.jupiter.api.Test
 import kotlin.test.*
 
 class ParserTests {
+  // region E-mail address
   @Test
   @Tag(Isolated)
   fun assert_email_address_validates_input() =
     with(EmailAddress.parse("mailbox@domain.com")) {
+      succeeds("No email address was parsed")
+      matches(EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
+      matches(EmailAddress::domainName, "domain.com", "Unexpected hostname")
+
+      assertEmailAddressMatchesRules(map(EmailAddress::address).orNull())
+    }
+
+  @Test
+  @Tag(Isolated)
+  fun assert_email_address_accepts_brackets() =
+    with(EmailAddress.parse("<mailbox@domain.com>")) {
       succeeds("No email address was parsed")
       matches(EmailAddress::mailbox, "mailbox", "Unexpected mailbox")
       matches(EmailAddress::domainName, "domain.com", "Unexpected hostname")
