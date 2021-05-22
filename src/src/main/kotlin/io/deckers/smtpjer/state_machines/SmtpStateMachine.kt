@@ -1,6 +1,8 @@
 package io.deckers.smtpjer.state_machines
 
 import com.tinder.StateMachine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.net.InetAddress
 
 private fun sendStatus(code: Int, message: String, extendedCode: String? = null) =
@@ -75,7 +77,7 @@ class SmtpStateMachine(params: SmtpStateMachineParams) {
     params.onTransitionListeners.forEach(::onTransition)
   }
 
-  fun transition(event: Event) {
+  suspend fun transition(event: Event) = withContext(Dispatchers.IO) {
     stateMachine.transition(event)
   }
 

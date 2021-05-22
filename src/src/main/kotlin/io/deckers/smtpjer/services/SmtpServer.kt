@@ -11,12 +11,13 @@ import io.deckers.smtpjer.state_machines.Event
 import io.deckers.smtpjer.state_machines.SmtpStateMachine
 import io.deckers.smtpjer.state_machines.State
 import io.deckers.smtpjer.utils.CircularQueue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import java.io.Closeable
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.*
-import kotlin.concurrent.thread
 
 private val logger = KotlinLogging.logger {}
 
@@ -34,8 +35,8 @@ private fun logEvent(event: Event) =
     else -> logger.error("Received unknown event ${event::class.simpleName}")
   }
 
-private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): () -> Unit =
-  { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
+private fun logInvalidTransition(t: StateMachine.Transition<State, Event, Command>): suspend () -> Unit =
+  suspend { logger.error("Failed to change state {} using command {}", t.fromState, t.event) }
 
 private class SmtpClientHandler(
   private val client: Socket,
@@ -52,28 +53,30 @@ private class SmtpClientHandler(
           .map(::processSideEffects)
           .getOrElse { logInvalidTransition(it) }
 
-      handleSideEffects()
+      suspend { handleSideEffects() }
     }
   }
 
-  private fun processSideEffects(t: StateMachine.Transition.Valid<State, Event, Command>): () -> Unit =
-    { processCommand(t) }
+  private fun processSideEffects(t: StateMachine.Transition.Valid<State, Event, Command>): suspend () -> Unit =
+    suspend { processCommand(t) }
 
-  private fun closeConnection() {
+  private suspend fun closeConnection() = withContext(Dispatchers.IO) {
     logger.debug("Closing connection to {}:{}", client.inetAddress, client.port)
-    writeStatus(221,  "Bye", "2.0.0")
+    writeStatus(221, "Bye", "2.0.0")
     client.close()
     logger.debug("Closed connection to {}:{}", client.inetAddress, client.port)
   }
 
-  private fun writeStatus(code: Int, message: String, extendedCode: String? = null) =
-    writer.write(
-      Option.fromNullable(extendedCode)
-        .map { "$code $extendedCode $message\n" }
-        .getOrElse { "$code $message\n" }
-        .toByteArray())
+  private suspend fun writeStatus(code: Int, message: String, extendedCode: String? = null) =
+    withContext(Dispatchers.IO) {
+      writer.write(
+        Option.fromNullable(extendedCode)
+          .map { "$code $extendedCode $message\n" }
+          .getOrElse { "$code $message\n" }
+          .toByteArray())
+    }
 
-  private fun processDataStream(dataState: State.Data) {
+  private suspend fun processDataStream(dataState: State.Data) {
     writeStatus(354, "Start mail input; end with <CRLF>.<CRLF>")
 
     val processor = processorFactory.create(dataState.domain, dataState.mailFrom, dataState.rcptTo)
@@ -96,7 +99,7 @@ private class SmtpClientHandler(
     writeStatus(250, "Message Accepted", "2.6.0")
   }
 
-  private fun processCommand(
+  private suspend fun processCommand(
     validTransition: StateMachine.Transition.Valid<State, Event, Command>,
   ) {
     val (command, fromState) = Pair(validTransition.sideEffect, validTransition.fromState)
@@ -108,19 +111,20 @@ private class SmtpClientHandler(
     }
   }
 
-  private tailrec fun transitionToNextState(): Either<Throwable, StateMachine.Transition<State, Event, Command>> {
-    val errorOrResult = Either.catch {
-      val errorOrParsedCommand = parseCommand(reader.nextLine())
+  private tailrec suspend fun transitionToNextState(): Either<Throwable, StateMachine.Transition<State, Event, Command>> {
+    val errorOrResult =
+      Either.catch {
+        val errorOrParsedCommand = parseCommand(reader.nextLine())
 
-      val processParsedCommand =
-        errorOrParsedCommand
-          .fold(
-            { e -> { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
-            { o -> { stateMachine.transition(o) } }
-          )
+        val processParsedCommand =
+          errorOrParsedCommand
+            .fold(
+              { e -> suspend { logger.error(e) { "Failed to parse command" }; stateMachine.transition(Event.OnParseError) } },
+              { o -> suspend { stateMachine.transition(o) } }
+            )
 
-      processParsedCommand()
-    }
+        processParsedCommand()
+      }
 
     return when (errorOrResult) {
       is Either.Left -> errorOrResult
@@ -128,7 +132,7 @@ private class SmtpClientHandler(
     }
   }
 
-  fun run() {
+  suspend fun run() {
     logger.debug("Running ${SmtpClientHandler::class.simpleName}")
 
     stateMachine.transition(Event.OnConnect)
@@ -162,13 +166,15 @@ class SmtpServer(port: Int, private val dataProcessorFactory: DataProcessorFacto
     logger.debug(message)
   }
 
-  private tailrec fun waitForConnections() {
-    val errorOrResult = Either.catch {
-      logger.info("Waiting for connections on port (port={})", socket.localPort)
-      val client = socket.accept()
-      logger.info("Received connection on port (port={})", socket.localPort)
+  private tailrec suspend fun waitForConnections() {
+    val errorOrResult = withContext(Dispatchers.IO) {
+      Either.catch {
+        logger.info("Waiting for connections on port (port={})", socket.localPort)
+        val client = socket.accept()
+        logger.info("Received connection on port (port={})", socket.localPort)
 
-      SmtpClientHandler(client, dataProcessorFactory).use(SmtpClientHandler::run)
+        SmtpClientHandler(client, dataProcessorFactory).use { it.run() }
+      }
     }
 
     when (errorOrResult) {
@@ -177,10 +183,8 @@ class SmtpServer(port: Int, private val dataProcessorFactory: DataProcessorFacto
     }
   }
 
-  fun run(): SmtpServer {
-    thread {
-      waitForConnections()
-    }
+  suspend fun run(): SmtpServer {
+    waitForConnections()
 
     return this
   }

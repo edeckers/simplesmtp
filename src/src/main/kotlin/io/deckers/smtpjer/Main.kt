@@ -6,6 +6,7 @@ import io.deckers.smtpjer.services.SmtpServer
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.default
+import kotlinx.coroutines.*
 import mu.KotlinLogging
 import java.net.InetAddress
 import kotlin.system.exitProcess
@@ -21,10 +22,9 @@ private const val DefaultPort = 25
 private val DefaultBackend = Backends.File
 
 private val logger = KotlinLogging.logger {}
+private val argumentParser = ArgParser("KtSmtp")
 
-fun main(args: Array<String>) {
-  val argumentParser = ArgParser("KtSmtp")
-
+fun main(args: Array<String>): Unit = runBlocking {
   val port by argumentParser
     .option(
       ArgType.Int,
@@ -71,18 +71,20 @@ fun main(args: Array<String>) {
   if (backend == Backends.Proxy) {
     if (maybeProxyTo == null) {
       logger.info("No proxy host was provided; it's required when using backend 'proxy'")
-      return
+      return@runBlocking
     }
 
     logger.info("Proxying requests to $maybeProxyTo:$proxyPort")
   }
 
-  val dataProcessorFactory = when (backend) {
-    Backends.File -> FileDataProcessorFactory()
-    Backends.Proxy -> PoorMansProxyFactory(
-      InetAddress.getByName(maybeProxyTo),
-      DefaultPort
-    )
+  val dataProcessorFactory = withContext(Dispatchers.IO) {
+    when (backend) {
+      Backends.File -> FileDataProcessorFactory()
+      Backends.Proxy -> PoorMansProxyFactory(
+        InetAddress.getByName(maybeProxyTo),
+        DefaultPort
+      )
+    }
   }
 
   SmtpServer(port, dataProcessorFactory).run().use {
