@@ -2,6 +2,7 @@ package io.deckers.smtpjer.parsers
 
 import arrow.core.Either
 import arrow.core.Option
+import arrow.core.Option.Companion.fromNullable
 import arrow.core.getOrElse
 import io.deckers.smtpjer.state_machines.*
 
@@ -12,7 +13,7 @@ private const val CommandMailFrom = "MAIL FROM"
 private const val CommandRcptTo = "RCPT TO"
 private const val CommandQuit = "QUIT"
 
-private fun testCommand(actual: String, expected: String) = actual.toUpperCase() == expected
+private fun testCommand(actual: String, expected: String) = actual.equals(expected, ignoreCase = true)
 
 private fun testNumParams(actual: List<String>, expected: Int) = actual.size == expected
 
@@ -29,12 +30,15 @@ private fun unexpectedNumParams(command: String, actualCount: Int, expected: Lis
   return Either.Left(Error(message))
 }
 
-private fun stripCommand(line: String) = line.trim().replace("\\s+".toRegex(), " ")
+private fun canonizeCommand(line: String) = line.trim().replace("\\s+".toRegex(), " ")
 
 private fun readCommand(line: String, separator: Char) =
-  with(stripCommand(line)) {
-    val firstOccurrence = indexOfFirst { c -> c == separator }
-    val index = if (firstOccurrence > -1) firstOccurrence else length
+  with(canonizeCommand(line)) {
+    val firstOccurrence = indexOfFirst { it == separator }
+    val index =
+      fromNullable(firstOccurrence)
+        .filter { it > -1 }
+        .getOrElse { length }
 
     val command = substring(0, index)
 
@@ -47,7 +51,7 @@ private fun readCommand(line: String, separator: Char) =
     Pair(command, params)
   }
 
-private fun parseEhlo(line: String): Either<Throwable, Event> =
+private fun parseEhlo(line: String) =
   readCommand(line, ' ').let { (command, params) ->
     when {
       !testCommand(command, CommandEhlo) -> unexpectedCommand(command, CommandEhlo)
@@ -56,7 +60,7 @@ private fun parseEhlo(line: String): Either<Throwable, Event> =
     }
   }
 
-private fun parseHelo(line: String): Either<Throwable, Event> =
+private fun parseHelo(line: String) =
   readCommand(line, ' ').let { (command, params) ->
     when {
       !testCommand(command, CommandHelo) -> unexpectedCommand(command, CommandHelo)
@@ -65,7 +69,7 @@ private fun parseHelo(line: String): Either<Throwable, Event> =
     }
   }
 
-private fun parseMailFrom(line: String): Either<Throwable, Event> =
+private fun parseMailFrom(line: String) =
   readCommand(line, ':').let { (command, params) ->
     when {
       !testCommand(command, CommandMailFrom) -> unexpectedCommand(command, CommandMailFrom)
@@ -74,7 +78,7 @@ private fun parseMailFrom(line: String): Either<Throwable, Event> =
     }
   }
 
-private fun parseRcptTo(line: String): Either<Throwable, Event> =
+private fun parseRcptTo(line: String) =
   readCommand(line, ':').let { (command, params) ->
     when {
       !testCommand(command, CommandRcptTo) -> unexpectedCommand(command, CommandRcptTo)
@@ -111,7 +115,7 @@ private val parsers = mapOf(
 )
 
 fun parseCommand(line: String): Either<Throwable, Event> {
-  val trimmedLine = stripCommand(line)
+  val trimmedLine = canonizeCommand(line)
   val maybeKey = parsers.keys.firstOrNull { trimmedLine.startsWith(it, true) }
 
   val parseLine =
