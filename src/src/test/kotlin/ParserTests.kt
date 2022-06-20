@@ -1,4 +1,10 @@
-import arrow.core.flatMap
+/**
+ * Copyright (c) Ely Deckers.
+ *
+ * This source code is licensed under the MPL-2.0 license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+ import arrow.core.flatMap
 import utils.*
 import io.deckers.smtpjer.parsers.EmailAddress
 import io.deckers.smtpjer.state_machines.Event
